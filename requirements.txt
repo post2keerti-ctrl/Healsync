@@ -1,0 +1,31 @@
+# --- Web framework ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+pydantic==2.9.2
+email-validator==2.2.0
+
+# --- Database: MongoDB Atlas ---
+pymongo==4.9.1
+mongomock==4.2.0.post1    # in-memory Mongo used ONLY when no real MONGODB_URI is set (local dev)
+
+# --- Auth: Firebase Authentication ---
+firebase-admin==6.5.0
+python-jose[cryptography]==3.3.0   # used only by the local dev-login fallback token
+
+# --- OCR: Tesseract ---
+pytesseract==0.3.13
+pillow==10.4.0
+
+# --- NLP / Medical NER: spaCy + scispaCy ---
+spacy==3.8.16
+# scispacy==0.5.4 requires spaCy < 3.8; the app uses its rule-based fallback when absent.
+# Real model install commands (run once, outside this sandbox):
+#   python -m spacy download en_core_web_sm
+#   pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
+
+# --- Maps / Routing ---
+googlemaps==4.10.0
+
+# --- HTTP client (used to call a local Llama 3 / Ollama server) ---
+httpx==0.27.2

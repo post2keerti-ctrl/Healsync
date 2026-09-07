@@ -1,0 +1,1131 @@
+<!DOCTYPE html>32
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HealSync — Live Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#142136; --ink-soft:#4B5768; --paper:#F4F6F8; --surface:#FFFFFF; --hairline:#DEE4EA;
+    --vital:#E8503A; --vital-dim:#FBE3DE; --sage:#4C9A78; --sage-dim:#DEEFE6;
+    --amber:#F2A93B; --amber-dim:#FCEDD3; --navy:#16233F; --navy-soft:#2A3A5C;
+    --lav:#7C6FE0; --lav-dim:#E7E4FB; --teal:#0E7C86; --teal-dim:#D7EFEF;
+    --radius-frame:44px;
+  }
+  async function uploadDocument(){
+    const input = document.getElementById('discharge-file');
+    if(!input || !input.files.length) return toast('Choose a discharge image first');
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    try{
+      await api('/patients/me/documents', {method:'POST', body:form});
+      S.apiData.recovery = await api('/patients/me/recovery-plan');
+      S.apiData.dashboard = await api('/patients/me/dashboard');
+      toast('Document processed and recovery plan updated');
+      render();
+    }catch(error){ toast(`Document processing failed: ${error.message}`); }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);font-family:'Inter',sans-serif;color:var(--ink);}
+  ::selection{background:var(--vital-dim);}
+
+  .stage-wrap{display:flex;flex-direction:column;align-items:center;padding:40px 16px 60px;}
+  .stage-head{text-align:center;max-width:480px;margin-bottom:22px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--vital);font-weight:600;}
+  h1.title{font-family:'Fraunces',serif;font-weight:600;font-size:30px;line-height:1.1;margin:8px 0 8px;letter-spacing:-0.01em;}
+  p.lede{font-size:13.5px;line-height:1.55;color:var(--ink-soft);margin:0;}
+
+  .quickbar{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center;}
+  .qchip{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:7px 12px;border-radius:20px;border:1.5px solid var(--hairline);background:var(--surface);color:var(--ink-soft);cursor:pointer;transition:.15s;user-select:none;}
+  .qchip:hover{border-color:var(--navy);color:var(--navy);}
+  .quicknote{font-size:10.5px;color:var(--ink-soft);margin-top:8px;max-width:340px;}
+
+  .phone{
+    width:min(375px,92vw); aspect-ratio:375/812;
+    background:var(--surface); border-radius:var(--radius-frame);
+    box-shadow:0 1px 2px rgba(20,33,54,.04),0 24px 48px -12px rgba(20,33,54,.22);
+    position:relative;overflow:hidden;border:1px solid var(--hairline);
+  }
+  @media (min-width: 700px){
+    .stage-wrap{min-height:100vh;padding:32px 28px 48px;justify-content:center;}
+    .stage-head{max-width:680px;}
+    .phone{width:min(760px,92vw);height:min(790px,calc(100vh - 190px));aspect-ratio:auto;border-radius:28px;}
+    .statusbar{height:46px;}
+    .screen{height:calc(100% - 46px);}
+    .screen > .pad{max-width:720px;margin:0 auto;}
+  }
+  @media (min-width: 1100px){
+    .stage-wrap{align-items:stretch;}
+    .stage-head{width:min(760px,92vw);margin-left:auto;margin-right:auto;}
+    .phone{width:min(980px,92vw);margin:0 auto;}
+    .screen > .pad{padding-left:48px;padding-right:48px;}
+  }
+  @media (max-width: 420px){
+    .stage-wrap{padding:20px 10px 28px;}
+    .stage-head{margin-bottom:14px;}
+    h1.title{font-size:26px;}
+    p.lede{font-size:12.5px;}
+    .phone{width:100%;border-radius:28px;}
+    .pad{padding-left:16px;padding-right:16px;}
+    .statusbar{padding-left:18px;padding-right:18px;}
+    .ob-body{padding-left:20px;padding-right:20px;}
+  }
+  .statusbar{height:52px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;position:relative;z-index:5;background:var(--surface);}
+  .screen{height:calc(100% - 52px);overflow-y:auto;overflow-x:hidden;position:relative;-ms-overflow-style:none;scrollbar-width:none;}
+  .screen::-webkit-scrollbar{display:none;}
+  .pad{padding:0 22px;}
+
+  .h-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 0 18px;}
+  .h-bar .greet{font-family:'Fraunces',serif;font-size:22px;font-weight:600;}
+  .h-bar .sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .sub{font-size:12.5px;color:var(--ink-soft);}
+  .avatar{width:38px;height:38px;border-radius:12px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;flex:none;cursor:pointer;}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:20px;}
+  .pill.sage{background:var(--sage-dim);color:var(--sage);}
+  .pill.vital{background:var(--vital-dim);color:var(--vital);}
+  .pill.amber{background:var(--amber-dim);color:#9C6B12;}
+  .pill.lav{background:var(--lav-dim);color:var(--lav);}
+  .pill.neutral{background:var(--paper);color:var(--ink-soft);}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:20px;padding:16px;margin-bottom:14px;}
+  .card.navy{background:var(--navy);color:#fff;border:none;}
+  .card.navy .muted{color:#9FB0CC;}
+  .card.clickable{cursor:pointer;transition:.15s;}
+  .card.clickable:hover{border-color:var(--navy);}
+
+  .row{display:flex;align-items:center;justify-content:space-between;}
+  .label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .divider{height:1px;background:var(--hairline);margin:12px 0;}
+
+  .btn{text-align:center;border-radius:12px;padding:14px;font-weight:600;font-size:14.5px;cursor:pointer;user-select:none;transition:.15s;}
+  .btn:active{transform:scale(.98);}
+  .btn-vital{background:var(--vital);color:#fff;}
+  .btn-navy{background:var(--navy);color:#fff;}
+  .btn-teal{background:var(--teal);color:#fff;}
+  .btn-lav{background:var(--lav);color:#fff;}
+  .btn-ghost{border:1.5px solid var(--hairline);color:var(--ink-soft);}
+  .btn-disabled{background:var(--sage-dim);color:var(--sage);cursor:default;}
+  .link-sm{font-size:11.5px;color:var(--vital);font-weight:600;cursor:pointer;text-align:center;}
+
+  .tabbar{position:sticky;left:0;right:0;bottom:0;height:78px;min-height:78px;background:var(--surface);border-top:1px solid var(--hairline);display:flex;align-items:center;justify-content:space-around;padding-bottom:14px;z-index:5;}
+  .tabbar .item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px 6px;}
+  .tabbar .item .ic{width:20px;height:20px;border-radius:6px;background:var(--hairline);}
+  .tabbar .item.active .ic{background:var(--vital);}
+  .tabbar .tlabel{font-size:9.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);}
+  .tabbar .item.active .tlabel{color:var(--vital);font-weight:600;}
+  .tabbar.doctor .item.active .ic{background:var(--navy);}
+  .tabbar.doctor .item.active .tlabel{color:var(--navy);}
+  .tabbar.supplier .item.active .ic{background:var(--teal);}
+  .tabbar.supplier .item.active .tlabel{color:var(--teal);}
+
+  .ring-wrap{position:relative;width:132px;height:132px;margin:6px auto 4px;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .ring-center .pct{font-family:'Fraunces',serif;font-size:30px;font-weight:600;}
+  .ring-center .pct-sub{font-size:10px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;}
+
+  .daytab{display:flex;gap:8px;overflow-x:auto;padding:2px 0 16px;}
+  .daytab .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:12px;background:var(--paper);color:var(--ink-soft);white-space:nowrap;cursor:pointer;flex:none;}
+  .daytab .d.active{background:var(--navy);color:#fff;}
+  .tl-body{flex:1;padding-bottom:2px;}
+  .tl-body .t{font-size:13.5px;font-weight:600;}
+  .tl-body .d2{font-size:11.5px;color:var(--ink-soft);margin-top:1px;}
+  .tl-time{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);width:44px;padding-top:3px;flex:none;}
+  .tl-rail{width:2px;background:var(--hairline);position:relative;flex:none;}
+  .tl-rail .node{position:absolute;left:-4px;top:2px;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface);}
+
+  .upload-zone{border:1.5px dashed var(--hairline);border-radius:18px;padding:26px 18px;text-align:center;margin-bottom:16px;}
+  .upload-zone .icon{width:44px;height:44px;border-radius:14px;background:var(--vital-dim);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;}
+  .step-row{display:flex;align-items:center;gap:10px;padding:9px 0;}
+  .step-row .chip{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'IBM Plex Mono',monospace;flex:none;}
+  .step-row .chip.done{background:var(--sage);color:#fff;}
+  .step-row .txt{font-size:12.5px;}
+  .step-row .txt .m{color:var(--ink-soft);font-size:11px;}
+
+  .cart-item{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--hairline);}
+  .cart-item:last-child{border-bottom:none;}
+  .cart-item .nm{font-size:13.5px;font-weight:600;}
+  .cart-item .cat{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;font-family:'IBM Plex Mono',monospace;}
+  .cart-item .amt{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;}
+
+  .sup-card{border:1.5px solid var(--hairline);border-radius:18px;padding:14px;margin-bottom:12px;position:relative;}
+  .sup-card.optimal{border-color:var(--sage);background:linear-gradient(180deg,var(--sage-dim),var(--surface) 55%);}
+  .sup-badge{position:absolute;top:-9px;right:14px;background:var(--sage);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:4px 9px;border-radius:20px;text-transform:uppercase;}
+  .sup-meta{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;}
+  .sup-meta .mi{font-size:10.5px;color:var(--ink-soft);}
+  .sup-meta .mi b{display:block;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);font-weight:600;}
+  .score-bar{height:5px;border-radius:3px;background:var(--hairline);margin-top:10px;overflow:hidden;}
+  .score-bar .fill2{height:100%;background:var(--sage);border-radius:3px;}
+
+  .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--hairline);}
+  .toggle-row:last-child{border-bottom:none;}
+  .toggle-row .t1{font-size:13.5px;font-weight:600;}
+  .toggle-row .t2{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .switch{width:40px;height:23px;border-radius:20px;position:relative;flex:none;cursor:pointer;}
+  .switch.on{background:var(--vital);}
+  .switch.off{background:var(--hairline);}
+  .switch .knob{position:absolute;top:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.18);transition:.15s;}
+  .switch.on .knob{right:2px;}
+  .switch.off .knob{left:2px;}
+  .notif-item{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--hairline);}
+  .notif-item:last-child{border-bottom:none;}
+  .notif-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none;}
+
+  .copilot-pill{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:20px;background:var(--lav-dim);color:var(--lav);margin-bottom:12px;}
+  .conf-card{background:var(--surface);border:1.5px solid var(--hairline);border-radius:20px;padding:16px;margin-bottom:14px;}
+  .conf-head{display:flex;justify-content:space-between;align-items:baseline;}
+  .conf-score{font-family:'Fraunces',serif;font-size:32px;font-weight:600;}
+  .conf-legend{display:flex;gap:14px;margin-top:6px;}
+  .conf-legend .li{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-soft);}
+  .conf-legend .sw{width:12px;height:2.5px;border-radius:2px;}
+
+  .ledger-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--hairline);}
+  .ledger-row:last-child{border-bottom:none;}
+  .ledger-row .k{font-size:11.5px;color:var(--ink-soft);}
+  .ledger-row .v{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;text-align:right;}
+  .verified{display:inline-flex;align-items:center;gap:4px;color:var(--sage);font-weight:600;}
+
+  .escalate-band{background:var(--vital-dim);border:1.5px solid var(--vital);border-radius:16px;padding:13px 14px;margin-bottom:14px;}
+  .escalate-band .et{font-size:12.5px;font-weight:700;color:var(--vital);}
+  .escalate-band .ed{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .escalate-actions{display:flex;gap:8px;margin-top:10px;}
+  .escalate-actions .a{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:9px;border-radius:10px;cursor:pointer;}
+  .escalate-actions .a.primary{background:var(--vital);color:#fff;}
+  .escalate-actions .a.ghost{border:1.5px solid var(--vital);color:var(--vital);}
+
+  .role-tag{display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:20px;}
+  .role-tag.doctor{background:#DCE4F2;color:var(--navy);}
+  .role-tag.supplier{background:#D7EFEF;color:var(--teal);}
+
+  .patient-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--hairline);cursor:pointer;}
+  .patient-row:last-child{border-bottom:none;}
+  .p-avatar{width:36px;height:36px;border-radius:10px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;flex:none;}
+  .p-info{flex:1;}
+  .p-info .nm{font-size:13.5px;font-weight:600;}
+  .p-info .sub2{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .p-score{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;text-align:right;}
+  .p-score .s2{display:block;font-size:9px;color:var(--ink-soft);font-weight:500;text-transform:uppercase;}
+
+  .adjust-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--hairline);}
+  .adjust-row:last-child{border-bottom:none;}
+  .adjust-row .an{font-size:13px;font-weight:600;}
+  .adjust-row .av{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .stepper{display:flex;align-items:center;gap:10px;}
+  .stepper .btn3{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--hairline);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--ink-soft);cursor:pointer;user-select:none;}
+  .stepper .btn3:hover{border-color:var(--navy);color:var(--navy);}
+  .stepper .val3{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;min-width:20px;text-align:center;}
+
+  .kpi-row{display:flex;gap:10px;margin-bottom:14px;}
+  .kpi{flex:1;background:var(--surface);border:1.5px solid var(--hairline);border-radius:16px;padding:12px;text-align:center;}
+  .kpi .kv{font-family:'Fraunces',serif;font-size:22px;font-weight:600;}
+  .kpi .kl{font-size:9.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+
+  .queue-item{border:1.5px solid var(--hairline);border-radius:16px;padding:12px;margin-bottom:10px;}
+  .queue-item .qh{display:flex;justify-content:space-between;align-items:center;}
+  .queue-item .qid{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;}
+  .queue-item .qitems{font-size:11.5px;color:var(--ink-soft);margin:4px 0 10px;}
+  .queue-actions{display:flex;gap:8px;}
+  .queue-actions .qa{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:8px;border-radius:10px;cursor:pointer;}
+  .queue-actions .qa.accept{background:var(--teal);color:#fff;}
+  .queue-actions .qa.decline{border:1.5px solid var(--hairline);color:var(--ink-soft);}
+
+  .inv-row{padding:11px 0;border-bottom:1px solid var(--hairline);}
+  .inv-row:last-child{border-bottom:none;}
+  .inv-row .ih{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;}
+  .inv-row .ih b{font-family:'IBM Plex Mono',monospace;}
+  .inv-bar{height:6px;border-radius:3px;background:var(--hairline);overflow:hidden;}
+  .inv-bar .fi{height:100%;border-radius:3px;}
+
+  .rank-hero{text-align:center;padding:18px 0 8px;}
+  .rank-hero .rn{font-family:'Fraunces',serif;font-size:44px;font-weight:600;color:var(--teal);}
+  .rank-hero .rl{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;}
+  .factor-row{margin-bottom:12px;}
+  .factor-row .fh{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px;}
+  .factor-row .fh b{font-family:'IBM Plex Mono',monospace;}
+  .factor-bar{height:6px;border-radius:3px;background:var(--hairline);overflow:hidden;}
+  .factor-bar .ff{height:100%;background:var(--teal);border-radius:3px;}
+  .tip-band{background:#D7EFEF;border-radius:14px;padding:12px 14px;font-size:11.5px;color:#0B5C63;margin-top:4px;}
+
+  .profile-card{text-align:center;padding:6px 0 10px;}
+  .profile-avatar{width:56px;height:56px;border-radius:16px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+
+  .toast{position:absolute;left:20px;right:20px;bottom:96px;background:var(--navy);color:#fff;padding:12px 16px;border-radius:12px;font-size:12.5px;font-weight:600;text-align:center;opacity:0;pointer-events:none;transform:translateY(6px);transition:.22s;z-index:70;box-shadow:0 12px 24px rgba(20,33,54,.25);}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  .footnote{max-width:600px;text-align:center;margin-top:24px;font-size:12px;color:var(--ink-soft);line-height:1.6;}
+
+  /* ---- splash ---- */
+  .splash{height:100%;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:16px;}
+  .splash .tag{font-size:12px;color:#9FB0CC;}
+  .spinner{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.22);border-top-color:var(--vital);animation:spin .8s linear infinite;margin-top:10px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---- onboarding ---- */
+  .ob-wrap{height:100%;display:flex;flex-direction:column;background:var(--surface);}
+  .ob-skip{display:flex;justify-content:flex-end;padding:18px 22px 0;}
+  .ob-skip span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);cursor:pointer;letter-spacing:.05em;}
+  .ob-art{flex:1;display:flex;align-items:center;justify-content:center;}
+  .ob-ring{width:132px;height:132px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:44px;}
+  .ob-body{padding:0 30px 6px;text-align:center;}
+  .ob-title{font-family:'Fraunces',serif;font-size:23px;font-weight:600;margin-bottom:8px;}
+  .ob-desc{font-size:13px;color:var(--ink-soft);line-height:1.55;}
+  .ob-dots{display:flex;gap:6px;justify-content:center;margin:20px 0 6px;}
+  .ob-dots .dt{width:6px;height:6px;border-radius:50%;background:var(--hairline);transition:.15s;}
+  .ob-dots .dt.active{background:var(--vital);width:18px;border-radius:4px;}
+  .ob-footer{padding:14px 26px 28px;}
+
+  /* ---- login segmented control ---- */
+  .seg{display:flex;background:var(--paper);border-radius:12px;padding:4px;gap:4px;margin:12px 0 4px;}
+  .seg .so{flex:1;text-align:center;padding:9px 4px;border-radius:9px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+  .seg .so.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(20,33,54,.14);}
+
+  /* ---- tip banner ---- */
+  .tip-banner{display:flex;gap:10px;align-items:flex-start;background:var(--lav-dim);border-radius:16px;padding:12px 14px;margin-bottom:14px;}
+  .tip-banner .tx{flex:1;font-size:11.5px;color:#4B4396;line-height:1.5;}
+  .tip-banner .cl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:var(--lav);cursor:pointer;white-space:nowrap;padding-top:1px;}
+
+  /* ---- empty state ---- */
+  .empty-state{text-align:center;padding:30px 14px;color:var(--ink-soft);}
+  .empty-state .es-t{font-size:13px;font-weight:600;color:var(--ink);}
+  .empty-state .es-d{font-size:11.5px;margin-top:4px;}
+
+  /* ---- delivery tracking stepper ---- */
+  .tstep{position:relative;padding-left:28px;padding-bottom:20px;}
+  .tstep:last-child{padding-bottom:0;}
+  .tstep .tnode{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;}
+  .tstep .tline{position:absolute;left:8px;top:18px;bottom:-2px;width:2px;}
+  .tstep:last-child .tline{display:none;}
+  .tstep .tt{font-size:13px;font-weight:600;}
+  .tstep .td{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .partner-card{display:flex;align-items:center;gap:10px;}
+  .partner-ic{width:40px;height:40px;border-radius:12px;background:var(--amber-dim);display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;}
+  .partner-call{width:34px;height:34px;border-radius:10px;background:var(--sage);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;font-size:14px;}
+
+  /* ---- account modal ---- */
+  .modal-overlay{position:absolute;inset:0;background:rgba(20,33,54,.45);z-index:80;display:flex;align-items:flex-end;}
+  .modal-sheet{background:#fff;border-radius:22px 22px 0 0;width:100%;padding:22px;max-height:78%;overflow-y:auto;}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .modal-close{width:28px;height:28px;border-radius:50%;background:var(--paper);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--ink-soft);}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <div class="stage-head">
+    <div class="eyebrow">HealSync · Live Prototype</div>
+    <h1 class="title">One login, three different apps.</h1>
+    <p class="lede">First-time users get a real onboarding walkthrough, then sign-in routes each person to a purpose-built app — patient companion, doctor console, or supplier queue.</p>
+    <div class="quickbar" id="quickbar"></div>
+    <div class="quicknote">Shortcuts above are for demo/grading convenience only — a real user only sees the phone screen itself.</div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="statusbar"><span>9:41</span><span>●●●●&nbsp;&nbsp;LTE</span></div>
+    <div class="screen" id="screen"></div>
+  </div>
+
+  <div class="footnote">Demo data only. Reference patterns: Practo / Apollo 24|7 (doctor review &amp; verified badges), Swiggy / Zomato (live delivery stepper), standard app onboarding carousels.</div>
+</div>
+
+<script>
+// ================= STATE =================
+const S = {
+  screen: 'splash',
+  onboardingSeen: false,
+  obIndex: 0,
+  loginRole: 'patient',
+  accountModalOpen: false,
+  patientTab: 'dashboard',
+  doctorTab: 'patients',
+  supplierTab: 'orders',
+  cartStage: 'cart',
+  activeDay: 'DAY 6',
+  toggles: { push:true, sms:true, email:false },
+  selectedPatient: 'Karthik Subramanian',
+  planStatus: 'pending',
+  stepper: { ibuprofen:5, mobility:2 },
+  coachSeen: { patient:false, doctor:false, supplier:false },
+  apiData: {},
+  orders: [
+    {id:'HS-483021', items:'Amoxicillin ×21, Ibuprofen ×10, Compression Bandage ×4', status:'new'},
+    {id:'HS-483014', items:'Walking Frame ×1 · out for delivery', status:'dispatched'}
+  ],
+  patients: [
+    {i:'KS', name:'Karthik Subramanian', sub:'Day 6 · Knee surgery', score:87, tone:'vital', note:'needs review'},
+    {i:'AN', name:'Anitha Nair', sub:'Day 2 · Appendectomy', score:96, tone:'sage', note:'on track'},
+    {i:'RV', name:'Ravi Verma', sub:'Day 11 · Hip replacement', score:92, tone:'sage', note:'on track'},
+    {i:'SP', name:'Sita Pillai', sub:'Day 4 · C-section', score:98, tone:'sage', note:'on track'}
+  ],
+  inventory: [
+    {name:'Amoxicillin 500mg', pct:82, tone:'sage'},
+    {name:'Ibuprofen 400mg', pct:15, tone:'vital'},
+    {name:'Compression Bandage', pct:64, tone:'sage'},
+    {name:'Walking Frame', pct:18, tone:'amber'}
+  ]
+};
+const toneVar = {sage:'var(--sage)', vital:'var(--vital)', amber:'var(--amber)'};
+
+const planMeta = {
+  'Karthik Subramanian': {flag:true, ibu:5, mob:2, note:"Pain self-report trended up two days in a row while adherence held steady — usually resolved by easing exercise load before adjusting medication."},
+  'Anitha Nair': {flag:false},
+  'Ravi Verma': {flag:false},
+  'Sita Pillai': {flag:false}
+};
+
+const dayData = {
+  'DAY 4': [
+    {time:'8:00', color:'vital', t:'Amoxicillin 500mg', d:'1 capsule · with food'},
+    {time:'1:00', color:'amber', t:'Light broth &amp; soft foods', d:'Easy on digestion post-op'},
+    {time:'5:00', color:'hairline', t:'Rest — no exercise yet', d:'Wound still settling'},
+    {time:'9:00', color:'vital', t:'Ibuprofen 400mg', d:'1 tablet · as needed'}
+  ],
+  'DAY 5': [
+    {time:'8:00', color:'vital', t:'Amoxicillin 500mg', d:'1 capsule · with food'},
+    {time:'1:00', color:'amber', t:'High-protein recovery meal', d:'Supports tissue healing'},
+    {time:'5:00', color:'sage', t:'Seated stretching', d:'5 min, very gentle'},
+    {time:'9:00', color:'vital', t:'Ibuprofen 400mg', d:'1 tablet · as needed'}
+  ],
+  'DAY 6': [
+    {time:'8:00', color:'vital', t:'Amoxicillin 500mg', d:'1 capsule · with food'},
+    {time:'1:00', color:'amber', t:'High-protein recovery meal', d:'Supports tissue healing'},
+    {time:'5:00', color:'sage', t:'Guided mobility exercise', d:'15 min gentle stretching'},
+    {time:'9:00', color:'vital', t:'Ibuprofen 400mg', d:'1 tablet · as needed'}
+  ],
+  'DAY 7': [
+    {time:'8:00', color:'vital', t:'Amoxicillin 500mg', d:'Final day of course'},
+    {time:'1:00', color:'amber', t:'High-protein recovery meal', d:'Supports tissue healing'},
+    {time:'5:00', color:'sage', t:'Guided mobility exercise', d:'20 min, moderate pace'},
+    {time:'9:00', color:'hairline', t:'Ibuprofen — taper', d:'Only if pain > 4/10'}
+  ],
+  'DAY 8': [
+    {time:'8:00', color:'sage', t:'Wound self-check', d:'Photograph &amp; log any redness'},
+    {time:'1:00', color:'amber', t:'Balanced recovery meal', d:'Iron &amp; protein focus'},
+    {time:'5:00', color:'sage', t:'Short walk', d:'10 min, flat ground'},
+    {time:'9:00', color:'hairline', t:'No medication scheduled', d:'Course completed'}
+  ]
+};
+
+// ================= HELPERS =================
+function toast(msg){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._tt);
+  window._tt = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+const API_BASE = window.location.origin;
+let authToken = localStorage.getItem('healsync_token');
+let firebaseAuth = null;
+
+async function initFirebaseAuth(){
+  const response = await fetch('/auth/firebase-config');
+  const config = await response.json();
+  if(!config.enabled) return false;
+  if(!firebase.apps.length) firebase.initializeApp(config);
+  firebaseAuth = firebase.auth();
+  return true;
+}
+
+async function api(path, options={}){
+  const headers = {...(options.headers||{})};
+  if(options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  if(authToken) headers.Authorization = `Bearer ${authToken}`;
+  const response = await fetch(`${API_BASE}${path}`, {...options, headers});
+  if(!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+// ================= NAV =================
+function init(){
+  S.screen = 'splash'; render();
+  setTimeout(()=>{ S.screen = S.onboardingSeen ? 'login' : 'onboarding'; render(); }, 1200);
+}
+function goLogin(){
+  if(firebaseAuth) firebaseAuth.signOut();
+  authToken = null;
+  localStorage.removeItem('healsync_token');
+  S.accountModalOpen=false; S.screen='login'; render(); renderQuickbar();
+}
+function startOnboarding(){ S.obIndex=0; S.screen='onboarding'; S.accountModalOpen=false; render(); renderQuickbar(); }
+function obNext(){ if(S.obIndex<2){ S.obIndex++; render(); } else { finishOnboarding(); } }
+function obSkip(){ finishOnboarding(); }
+function finishOnboarding(){ S.onboardingSeen=true; S.screen='login'; render(); renderQuickbar(); }
+function setLoginRole(r){ S.loginRole=r; render(); }
+function continueLogin(){
+  const email = document.getElementById('login-email')?.value.trim();
+  const password = document.getElementById('login-password')?.value;
+  loginAs(S.loginRole, email, password).catch(error=>showLoginError(error));
+}
+function showLoginError(error){
+  const message = error?.message || String(error);
+  const friendly = message.includes('auth/configuration-not-found')
+    ? 'Firebase Authentication is not enabled. Open Firebase Console > Authentication > Get started, then enable Email/Password sign-in.'
+    : message;
+  const area = document.getElementById('login-error');
+  if(area) area.textContent = friendly.replace('Firebase: ','');
+  toast(friendly.replace('Firebase: ',''));
+}
+async function createAccount(){
+  const email = document.getElementById('login-email')?.value.trim();
+  const password = document.getElementById('login-password')?.value;
+  try{
+    if(!email || !password) throw new Error('Enter an email and password first');
+    if(password.length < 6) throw new Error('Firebase passwords must be at least 6 characters');
+    if(!firebaseAuth && !(await initFirebaseAuth())) throw new Error('Firebase is not configured on the backend');
+    const credential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+    await credential.user.updateProfile({displayName:email.split('@')[0]});
+    await loginAs(S.loginRole, email, password);
+  }catch(error){ showLoginError(error); }
+}
+async function loginAs(role, email, password){
+  try{
+    if(!email || !password) return toast('Enter your Firebase email and password');
+    if(!firebaseAuth && !(await initFirebaseAuth())) return toast('Firebase is not configured on the backend');
+    const credential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+    authToken = await credential.user.getIdToken(true);
+    localStorage.setItem('healsync_token', authToken);
+    await api('/auth/sync-profile', {
+      method:'POST', body:JSON.stringify({name:credential.user.displayName || email.split('@')[0], role})
+    });
+    if(role === 'patient'){
+      S.apiData.dashboard = await api('/patients/me/dashboard');
+      S.apiData.recovery = await api('/patients/me/recovery-plan');
+      S.apiData.cart = await api('/patients/me/cart');
+      S.apiData.orders = await api('/patients/me/orders');
+      S.apiData.alerts = await api('/patients/me/alerts');
+    } else if(role === 'doctor') {
+      S.apiData.patients = await api('/doctors/me/patients');
+    } else if(role === 'supplier') {
+      S.apiData.orders = await api('/suppliers/me/orders');
+      S.apiData.inventory = await api('/suppliers/me/inventory');
+      S.apiData.score = await api('/suppliers/me/score');
+    }
+    S.screen=role; render(); renderQuickbar();
+    toast('Connected to HealSync backend');
+  }catch(error){
+    throw error;
+  }
+}
+function forgotPassword(){ toast('Password reset link sent (demo)'); }
+
+function scrollAppTop(){
+  requestAnimationFrame(()=>document.getElementById('screen')?.scrollTo({top:0,behavior:'instant'}));
+}
+function setPatientTab(tab){ S.patientTab = tab; render(); scrollAppTop(); }
+function setDoctorTab(tab){ S.doctorTab = tab; render(); scrollAppTop(); }
+function setSupplierTab(tab){ S.supplierTab = tab; render(); scrollAppTop(); }
+function openPatientPlan(name){
+  const patient = (S.apiData.patients || []).find(p=>p.name===name);
+  if(!patient) return toast('Patient data is not loaded');
+  S.selectedPatient = name; S.selectedPatientId = patient.id; S.doctorTab = 'plans';
+  S.planStatus = 'pending';
+  api(`/doctors/patients/${encodeURIComponent(patient.id)}/plan`).then(plan=>{
+    S.apiData.selectedPlan = plan; render();
+  }).catch(error=>toast(`Could not load plan: ${error.message}`));
+}
+function toggleSwitch(key){ S.toggles[key] = !S.toggles[key]; render(); }
+function stepIbu(delta){ S.stepper.ibuprofen = Math.min(14, Math.max(1, S.stepper.ibuprofen+delta)); render(); }
+function stepMob(delta){ S.stepper.mobility = Math.min(5, Math.max(1, S.stepper.mobility+delta)); render(); }
+function setDay(d){ S.activeDay = d; render(); scrollAppTop(); }
+async function findSupplier(){
+  try { S.apiData.cart = await api('/patients/me/cart'); S.cartStage='match'; render(); }
+  catch(error){ toast(`Could not load cart: ${error.message}`); }
+}
+async function confirmOrder(){
+  try {
+    S.apiData.activeOrder = await api('/patients/me/orders', {method:'POST'});
+    S.apiData.orders = await api('/patients/me/orders');
+    S.cartStage='tracking'; toast(`Order ${S.apiData.activeOrder.reference} confirmed`); render();
+  } catch(error){ toast(`Could not place order: ${error.message}`); }
+}
+function backToCart(){ S.cartStage='cart'; render(); }
+function callPartner(){ toast('Calling delivery partner… (demo)'); }
+async function acceptOrder(id){
+  try { await api(`/suppliers/orders/${encodeURIComponent(id)}/accept`, {method:'POST'}); S.apiData.orders=await api('/suppliers/me/orders'); toast('Order accepted'); render(); }
+  catch(error){ toast(`Could not accept order: ${error.message}`); }
+}
+async function declineOrder(id){
+  try { await api(`/suppliers/orders/${encodeURIComponent(id)}/decline`, {method:'POST'}); S.apiData.orders=await api('/suppliers/me/orders'); toast('Order declined'); render(); }
+  catch(error){ toast(`Could not decline order: ${error.message}`); }
+}
+async function pushPlan(){
+  try {
+    const plan = S.apiData.selectedPlan || [];
+    const adjustments = plan.map(item=>({item_id:item.id,time:item.time,title:item.title,description:item.description}));
+    S.apiData.selectedPlan = await api(`/doctors/patients/${encodeURIComponent(S.selectedPatientId)}/plan`, {
+      method:'PUT', body:JSON.stringify({adjustments, approve:true})
+    });
+    S.planStatus='approved'; toast(`Plan approved for ${S.selectedPatient.split(' ')[0]}`); render();
+  } catch(error){ toast(`Could not approve plan: ${error.message}`); }
+}
+function escalate(msg){ toast(msg); }
+function dismissCoach(key){ S.coachSeen[key]=true; render(); }
+function openAccountModal(){ S.accountModalOpen=true; render(); }
+function closeAccountModal(){ S.accountModalOpen=false; render(); }
+
+// ================= QUICKBAR (demo aid, outside phone) =================
+function renderQuickbar(){
+  const items = [
+    {k:'restart', l:'Restart from splash'},
+    {k:'onboarding', l:'Preview onboarding'},
+    {k:'patient', l:'Patient app'},
+    {k:'doctor', l:'Doctor app'},
+    {k:'supplier', l:'Supplier app'}
+  ];
+  document.getElementById('quickbar').innerHTML = items.map(it=>{
+    const isActive = (it.k==='restart' && S.screen==='splash') || S.screen===it.k;
+    return `<div class="qchip ${isActive?'active':''}" onclick="qbJump('${it.k}')">${it.l}</div>`;
+  }).join('');
+}
+function qbJump(k){
+  if(k==='restart'){ init(); return; }
+  if(k==='onboarding'){ startOnboarding(); return; }
+  loginAs(k);
+}
+
+// ================= SCREENS =================
+function screenSplash(){
+  return `
+    <div class="splash">
+      <svg width="42" height="42" viewBox="0 0 46 46" fill="none"><path d="M4 24H14L18 12L26 36L30 24H42" stroke="#E8503A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;">HealSync</div>
+      <div class="tag">Post-surgical recovery, coordinated.</div>
+      <div class="spinner"></div>
+    </div>`;
+}
+
+const obSlides = [
+  {ring:'vital-dim', emoji:'📄', title:'Your recovery, mapped out', desc:'Upload your discharge summary once. HealSync reads it and builds a day-by-day recovery plan automatically.'},
+  {ring:'lav-dim', emoji:'🩺', title:'Doctor-approved, always', desc:'Every AI-generated plan is reviewed by your doctor before it reaches you — and can be adjusted any time.'},
+  {ring:'teal-dim', emoji:'🚚', title:'Medicines delivered, tracked live', desc:'Your recovery cart is matched to the best nearby supplier and tracked door to door, like a food delivery order.'}
+];
+function screenOnboarding(){
+  const s = obSlides[S.obIndex];
+  return `
+    <div class="ob-wrap">
+      <div class="ob-skip"><span onclick="obSkip()">SKIP</span></div>
+      <div class="ob-art"><div class="ob-ring" style="background:var(--${s.ring});">${s.emoji}</div></div>
+      <div class="ob-body">
+        <div class="ob-title">${s.title}</div>
+        <div class="ob-desc">${s.desc}</div>
+        <div class="ob-dots">${obSlides.map((_,i)=>`<div class="dt ${i===S.obIndex?'active':''}"></div>`).join('')}</div>
+      </div>
+      <div class="ob-footer">
+        <div class="btn btn-vital" onclick="obNext()">${S.obIndex===2?'Get started':'Next'}</div>
+      </div>
+    </div>`;
+}
+
+function screenLogin(){
+  return `
+  <div style="background:var(--navy);color:#fff;min-height:100%;position:relative;">
+    <div class="pad" style="padding-top:56px;">
+      <svg width="40" height="40" viewBox="0 0 46 46" fill="none"><path d="M4 24H14L18 12L26 36L30 24H42" stroke="#E8503A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;margin-top:14px;">HealSync</div>
+      <div style="font-size:12.5px;color:#9FB0CC;margin-top:4px;">Post-surgical recovery, coordinated.</div>
+    </div>
+    <div style="background:var(--surface);border-radius:28px 28px 0 0;position:absolute;left:0;right:0;bottom:0;top:190px;color:var(--ink);overflow-y:auto;" class="pad">
+      <div style="padding-top:22px;padding-bottom:22px;">
+        <div class="label">Email</div>
+        <input id="login-email" type="email" autocomplete="email" placeholder="you@example.com" style="display:block;width:100%;border:1.5px solid var(--hairline);border-radius:12px;padding:12px 14px;margin:6px 0 12px;font-size:13.5px;color:var(--ink);" />
+        <div class="label">Password</div>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="Password" style="display:block;width:100%;border:1.5px solid var(--hairline);border-radius:12px;padding:12px 14px;margin:6px 0 4px;font-size:13.5px;color:var(--ink);" />
+        <div class="link-sm" style="text-align:right;margin-bottom:6px;" onclick="forgotPassword()">Forgot password?</div>
+
+        <div class="label" style="margin-top:10px;">I am signing in as</div>
+        <div class="seg">
+          <div class="so ${S.loginRole==='patient'?'active':''}" onclick="setLoginRole('patient')">Patient</div>
+          <div class="so ${S.loginRole==='doctor'?'active':''}" onclick="setLoginRole('doctor')">Doctor</div>
+          <div class="so ${S.loginRole==='supplier'?'active':''}" onclick="setLoginRole('supplier')">Supplier</div>
+        </div>
+
+        <div id="login-error" style="min-height:18px;margin-top:8px;color:var(--vital);font-size:11.5px;text-align:center;"></div>
+        <div class="btn btn-vital" style="margin-top:14px;" onclick="continueLogin()">Continue as ${S.loginRole[0].toUpperCase()+S.loginRole.slice(1)}</div>
+        <div class="link-sm" style="margin-top:16px;" onclick="startOnboarding()">New here? Take the 30-second tour</div>
+        <div style="font-size:10.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5;">By continuing you agree to HealSync's Terms of Service and Privacy Policy. Sign-in is secured by Firebase Authentication.</div>
+      </div>
+    </div>
+      <div class="link-sm" style="margin-top:12px;" onclick="createAccount()">Create a new Firebase account</div>
+    <div class="toast" id="toast"></div>
+  </div>`;
+}
+
+// ---- ACCOUNT MODAL ----
+function accountModal(){
+  if(!S.accountModalOpen) return '';
+  let body='';
+  if(S.screen==='patient'){
+    body = `
+      <div class="profile-card">
+        <div class="profile-avatar" style="background:var(--navy);">KS</div>
+        <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;">Karthik Subramanian</div>
+        <div class="sub">Day 6 of 14 · Knee surgery recovery</div>
+      </div>
+      <div class="card"><div class="row"><span style="font-size:13px;">Care team</span><span class="mono" style="font-size:12px;">Dr. Meera Rao</span></div></div>`;
+  } else if(S.screen==='doctor'){
+    body = `
+      <div class="profile-card">
+        <div class="profile-avatar" style="background:var(--navy);">DR</div>
+        <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;">Dr. Meera Rao</div>
+        <div class="sub">Orthopedic &amp; Post-Surgical Care</div>
+        <div class="pill sage" style="margin-top:8px;">✓ License verified</div>
+      </div>`;
+  } else {
+    body = `
+      <div class="profile-card">
+        <div class="profile-avatar" style="background:var(--teal);">AM</div>
+        <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;">Apollo MedSupply Hub</div>
+        <div class="sub">Registered medical supplier · Chennai</div>
+        <div class="pill sage" style="margin-top:8px;">✓ GMP · ISO 13485 certified</div>
+      </div>`;
+  }
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) closeAccountModal()">
+      <div class="modal-sheet">
+        <div class="modal-head"><span class="label">Account</span><div class="modal-close" onclick="closeAccountModal()">✕</div></div>
+        ${body}
+        <div class="btn btn-ghost" style="margin-top:6px;" onclick="startOnboarding()">Replay app tour</div>
+        <div class="btn btn-vital" style="margin-top:10px;" onclick="goLogin()">Sign out</div>
+      </div>
+    </div>`;
+}
+
+// ---- PATIENT ----
+function patientTabbar(){
+  const tabs = [['dashboard','Dashboard'],['docs','Docs'],['recovery','Recovery'],['cart','Cart'],['alerts','Alerts']];
+  return `<div class="tabbar">${tabs.map(([k,l])=>`
+    <div class="item ${S.patientTab===k?'active':''}" onclick="setPatientTab('${k}')"><div class="ic"></div><div class="tlabel">${l}</div></div>`).join('')}</div>`;
+}
+function screenPatient(){
+  let body='';
+  if(S.patientTab==='dashboard') body = patientDashboard();
+  else if(S.patientTab==='docs') body = patientDocs();
+  else if(S.patientTab==='recovery') body = patientRecovery();
+  else if(S.patientTab==='cart') body = patientCart();
+  else if(S.patientTab==='alerts') body = patientAlerts();
+  return `<div class="pad" style="padding-top:12px;padding-bottom:96px;">${body}</div>${patientTabbar()}${accountModal()}<div class="toast" id="toast"></div>`;
+}
+function patientDashboard(){
+  return `
+    <div class="h-bar">
+      <div><div class="greet">Hi, Karthik</div><div class="sub">Day 6 of your recovery plan</div></div>
+      <div class="avatar" onclick="openAccountModal()">KS</div>
+    </div>
+    ${!S.coachSeen.patient ? `
+    <div class="tip-banner">
+      <div class="tx"><b>Welcome!</b> Your Recovery Confidence Score updates daily from your logged symptoms. Tap any card below to explore that part of your plan.</div>
+      <div class="cl" onclick="dismissCoach('patient')">GOT IT</div>
+    </div>` : ''}
+    <div class="copilot-pill">⟡ Dr. Rao is co-piloting your plan</div>
+
+    <div class="conf-card">
+      <div class="conf-head"><span class="label">Recovery Confidence Score</span><span class="conf-score">87</span></div>
+      <svg width="100%" height="46" viewBox="0 0 300 46" preserveAspectRatio="none" style="margin-top:6px;">
+        <path d="M0,30 30,26 60,28 90,20 120,22 150,14 180,16 210,10 240,12 270,7 300,8" fill="none" stroke="#DEE4EA" stroke-width="2" stroke-dasharray="4 4"/>
+        <path d="M0,32 30,30 60,25 90,24 120,18 150,19 180,12 210,13 240,9 270,9 300,6" fill="none" stroke="#E8503A" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <div class="conf-legend">
+        <div class="li"><span class="sw" style="background:var(--hairline);border-top:1.5px dashed var(--ink-soft);"></span>AI-predicted</div>
+        <div class="li"><span class="sw" style="background:var(--vital);"></span>Actual — ahead of plan</div>
+      </div>
+    </div>
+
+    <div class="ring-wrap">
+      <svg width="132" height="132">
+        <circle cx="66" cy="66" r="56" stroke="#DEE4EA" stroke-width="10" fill="none"/>
+        <circle cx="66" cy="66" r="56" stroke="#E8503A" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="352" stroke-dashoffset="123"/>
+      </svg>
+      <div class="ring-center"><div class="pct">65%</div><div class="pct-sub">TODAY'S PLAN</div></div>
+    </div>
+
+    <div class="card navy clickable" onclick="setPatientTab('cart')">
+      <div class="row"><span class="pill amber"><span class="dot"></span>Out for delivery</span><span class="mono" style="font-size:11.5px;color:#9FB0CC;">HS-483021</span></div>
+      <div style="margin-top:10px;font-size:14px;">Recovery Cart · 4 items</div>
+      <div class="row" style="margin-top:8px;"><span class="muted" style="font-size:11.5px;">from Apollo MedSupply Hub</span><span style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">ETA 24m</span></div>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="label">Next up</span><span class="pill sage"><span class="dot"></span>On track</span></div>
+      <div class="divider"></div>
+      <div class="row"><span style="font-size:13.5px;font-weight:600;">Amoxicillin 500mg</span><span class="mono" style="font-size:12px;color:var(--ink-soft);">1:00 PM</span></div>
+      <div class="row" style="margin-top:8px;"><span style="font-size:13.5px;font-weight:600;">Guided mobility exercise</span><span class="mono" style="font-size:12px;color:var(--ink-soft);">5:00 PM</span></div>
+    </div>
+
+    <div style="display:flex;gap:12px;">
+      <div class="card clickable" style="flex:1;text-align:center;margin-bottom:0;" onclick="setPatientTab('docs')">
+        <div style="font-size:12.5px;font-weight:600;">Upload document</div>
+        <div class="label" style="margin-top:3px;">Module 2</div>
+      </div>
+      <div class="card clickable" style="flex:1;text-align:center;margin-bottom:0;" onclick="setPatientTab('alerts')">
+        <div style="font-size:12.5px;font-weight:600;">3 reminders</div>
+        <div class="label" style="margin-top:3px;">Module 7</div>
+      </div>
+    </div>`;
+}
+function patientDocs(){
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:600;margin-bottom:4px;">Discharge Summary</div>
+    <div class="sub" style="margin-bottom:18px;">Upload once — HealSync reads the rest</div>
+    <div class="upload-zone">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V3M10 3L6 7M10 3L14 7" stroke="#E8503A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14V16H17V14" stroke="#E8503A" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div style="font-size:13px;font-weight:600;">discharge_summary.pdf</div>
+      <div class="label" style="margin-top:2px;">2.4 MB · uploaded</div>
+      <input id="discharge-file" type="file" accept="image/*" style="display:block;width:100%;margin-top:14px;font-size:11px;" />
+      <div class="btn btn-vital" style="margin-top:12px;" onclick="uploadDocument()">Upload and process</div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:8px;">AI Processing Pipeline</div>
+      <div class="step-row"><div class="chip done">✓</div><div class="txt">Tesseract OCR<div class="m">Reading scanned text</div></div></div>
+      <div class="step-row"><div class="chip done">✓</div><div class="txt">sciSpacy Medical NER<div class="m">Tagging clinical entities</div></div></div>
+      <div class="step-row"><div class="chip done">✓</div><div class="txt">Llama 3 LLM<div class="m">Structuring the recovery record</div></div></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Medicines</span><span class="pill vital">2 found</span></div>
+      <div class="divider"></div>
+      <div class="cart-item"><div><div class="nm">Amoxicillin 500mg</div><div class="cat">3× daily · 7 days</div></div></div>
+      <div class="cart-item"><div><div class="nm">Ibuprofen 400mg</div><div class="cat">2× daily · 5 days</div></div></div>
+    </div>
+    <div class="card" style="background:var(--lav-dim);border:none;">
+      <div style="font-size:12.5px;font-weight:600;color:var(--lav);">Follow-up scheduled</div>
+      <div style="font-family:'Fraunces',serif;font-size:19px;font-weight:600;margin-top:2px;">Day 10 · 10:30 AM</div>
+    </div>
+    <div class="btn btn-lav" onclick="setPatientTab('recovery')">View Recovery Plan</div>`;
+}
+function patientRecovery(){
+  const recovery = S.apiData.recovery || [];
+  const dayNumbers = [...new Set(recovery.map(item=>item.day))].sort((a,b)=>a-b);
+  const dashboardDay = S.apiData.dashboard?.recovery_day;
+  if(!dayNumbers.length && dashboardDay) dayNumbers.push(dashboardDay);
+  const days = dayNumbers.map(day=>`DAY ${day}`);
+  if(days.length && !days.includes(S.activeDay)) S.activeDay = days[0];
+  const day = Number((S.activeDay || '').replace('DAY ',''));
+  const colorMap = {medicine:'var(--vital)', meal:'var(--amber)', exercise:'var(--sage)'};
+  const items = recovery.filter(item=>item.day===day);
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:600;">Recovery Timeline</div>
+    <div class="sub" style="margin-bottom:14px;">${S.apiData.dashboard?.recovery_total_days || 14}-day plan · generated from your discharge summary</div>
+    <div class="daytab">${days.map(d=>`<div class="d ${S.activeDay===d?'active':''}" onclick="setDay('${d}')">${d}</div>`).join('')}</div>
+    ${!items.length ? `<div class="card"><div class="empty-state"><div class="es-t">Recovery plan is loading</div><div class="es-d">Upload a discharge summary or refresh your plan to see the next scheduled items.</div></div></div>` : `
+    <div style="display:flex;">
+      <div style="flex:none;">
+        ${items.map((it,idx)=>`<div class="tl-time" style="${idx>0?'margin-top:44px;':''}">${it.time}</div>`).join('')}
+      </div>
+      <div class="tl-rail" style="margin:2px 14px 0;">
+        ${items.map((it,idx)=>`<div class="node" style="top:${2+idx*52}px;background:${colorMap[it.category] || 'var(--hairline)'};"></div>`).join('')}
+      </div>
+      <div style="flex:1;">
+        ${items.map((it,idx)=>`<div class="tl-body" style="${idx<items.length-1?'margin-bottom:32px;':''}"><div class="t">${it.title}</div><div class="d2">${it.description}</div></div>`).join('')}
+      </div>
+    </div>`}
+  `;
+}
+function patientCart(){
+  const cart = S.apiData.cart || {items:[], total_amount:0};
+  const order = S.apiData.activeOrder || (S.apiData.orders || [])[0];
+  if(S.cartStage==='cart') return `
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:600;">Recovery Cart</div>
+    <div class="sub" style="margin-bottom:14px;">Auto-built from your recovery plan</div>
+    <div class="card">
+      ${cart.items.map(item=>`<div class="cart-item"><div><div class="nm">${item.name}</div><div class="cat">${item.category} · ×${item.qty}</div></div><div class="amt">₹${item.subtotal.toFixed(2)}</div></div>`).join('')}
+    </div>
+    <div class="card navy">
+      <div class="row"><span style="font-size:13px;color:#9FB0CC;">Estimated total</span><span style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">₹${cart.total_amount.toFixed(2)}</span></div>
+      <div class="divider" style="background:#2A3A5C;"></div>
+      <div style="font-size:12px;color:#9FB0CC;">Matched against 4 nearby suppliers — see best fit next</div>
+    </div>
+    <div class="btn btn-vital" onclick="findSupplier()">Review Supplier Match</div>`;
+  if(S.cartStage==='match') return `
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:600;">Supplier Match</div>
+    <div class="sub" style="margin-bottom:16px;">The backend will rank suppliers by stock, distance, cost and speed when you confirm.</div>
+    <div class="card navy"><div style="font-size:13px;color:#9FB0CC;">Cart total</div><div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">₹${cart.total_amount.toFixed(2)}</div><div style="font-size:12px;color:#9FB0CC;margin-top:8px;">${cart.items.length} items ready for matching</div></div>
+    <div class="btn btn-ghost" style="margin-bottom:10px;" onclick="backToCart()">Back to cart</div>
+    <div class="btn btn-vital" onclick="confirmOrder()">Confirm Order</div>`;
+  return `
+    <div class="row"><span style="font-family:'Fraunces',serif;font-size:22px;font-weight:600;">Order ${order?.reference || 'pending'}</span></div>
+    <div class="pill amber" style="margin:8px 0 14px;"><span class="dot"></span>${order?.status || 'new'}</div>
+    <div class="card">
+      <div class="label" style="margin-bottom:10px;">Order status</div>
+      <div class="tstep"><div class="tnode" style="background:var(--sage);">✓</div><div class="tline" style="background:var(--sage);"></div><div class="tt">Order confirmed</div><div class="td">9:02 AM</div></div>
+      <div class="tstep"><div class="tnode" style="background:var(--sage);">✓</div><div class="tline" style="background:var(--sage);"></div><div class="tt">Supplier: ${order?.supplier_name || 'being matched'}</div><div class="td">Score ${order?.match_score?.toFixed?.(2) || 'pending'}</div></div>
+      <div class="tstep"><div class="tnode" style="background:var(--vital);">●</div><div class="tline" style="background:var(--hairline);"></div><div class="tt">Distance ${order?.distance_km ? `${order.distance_km.toFixed(1)} km` : 'pending'}</div><div class="td">Delivery ETA pending</div></div>
+      <div class="tstep"><div class="tnode" style="background:var(--hairline);color:var(--ink-soft);">○</div><div class="tt" style="color:var(--ink-soft);">Delivered</div><div class="td">Pending</div></div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:10px;">Delivery partner</div>
+      <div class="partner-card">
+        <div class="partner-ic">🛵</div>
+        <div style="flex:1;">
+          <div style="font-size:13.5px;font-weight:600;">${order?.supplier_name || 'Supplier assigned'}</div>
+          <div style="font-size:11.5px;color:var(--ink-soft);">Order matched by HealSync</div>
+        </div>
+        <div class="partner-call" onclick="callPartner()">📞</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Supply Chain Trust Ledger</span><span class="verified">✓ Verified</span></div>
+      <div class="ledger-row"><span class="k">Batch / Lot no.</span><span class="v">AMX-2291-B7</span></div>
+      <div class="ledger-row"><span class="k">Cold-chain check</span><span class="v verified">✓ Maintained</span></div>
+      <div class="ledger-row"><span class="k">Supplier certification</span><span class="v">GMP · ISO 13485</span></div>
+    </div>
+    <div class="btn btn-ghost" onclick="backToCart()">Back to cart</div>`;
+}
+function patientAlerts(){
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:600;">Reminders</div>
+    <div class="sub" style="margin-bottom:14px;">Stay on schedule, your way</div>
+    <div class="escalate-band">
+      <div class="et">⚠ 2 doses missed today</div>
+      <div class="ed">HealSync noticed a pattern — want us to loop someone in?</div>
+      <div class="escalate-actions">
+        <div class="a primary" onclick="escalate('Caregiver notified')">Notify caregiver</div>
+        <div class="a ghost" onclick="escalate('Dr. Rao alerted')">Alert Dr. Rao</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="toggle-row"><div><div class="t1">Push notifications</div><div class="t2">Medication &amp; exercise alerts</div></div><div class="switch ${S.toggles.push?'on':'off'}" onclick="toggleSwitch('push')"><div class="knob"></div></div></div>
+      <div class="toggle-row"><div><div class="t1">SMS alerts</div><div class="t2">Refill reminders</div></div><div class="switch ${S.toggles.sms?'on':'off'}" onclick="toggleSwitch('sms')"><div class="knob"></div></div></div>
+      <div class="toggle-row"><div><div class="t1">Email digest</div><div class="t2">Daily recovery summary</div></div><div class="switch ${S.toggles.email?'on':'off'}" onclick="toggleSwitch('email')"><div class="knob"></div></div></div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:6px;">Upcoming</div>
+      <div class="notif-item"><div class="notif-dot" style="background:var(--vital);"></div><div><div style="font-size:13px;font-weight:600;">Amoxicillin 500mg due</div><div class="t2">Today, 1:00 PM</div></div></div>
+      <div class="notif-item"><div class="notif-dot" style="background:var(--amber);"></div><div><div style="font-size:13px;font-weight:600;">Order out for delivery</div><div class="t2">ETA 24 min</div></div></div>
+      <div class="notif-item"><div class="notif-dot" style="background:var(--sage);"></div><div><div style="font-size:13px;font-weight:600;">Follow-up in 4 days</div><div class="t2">Day 10 · 10:30 AM</div></div></div>
+    </div>`;
+}
+
+// ---- DOCTOR ----
+function doctorTabbar(){
+  const tabs = [['patients','Patients'],['alerts','Alerts'],['plans','Plans'],['profile','Profile']];
+  return `<div class="tabbar doctor">${tabs.map(([k,l])=>`
+    <div class="item ${S.doctorTab===k?'active':''}" onclick="setDoctorTab('${k}')"><div class="ic"></div><div class="tlabel">${l}</div></div>`).join('')}</div>`;
+}
+function screenDoctor(){
+  let body='';
+  if(S.doctorTab==='patients') body = doctorPatients();
+  else if(S.doctorTab==='alerts') body = doctorAlerts();
+  else if(S.doctorTab==='plans') body = doctorPlans();
+  else if(S.doctorTab==='profile') body = doctorProfile();
+  return `<div class="pad" style="padding-top:20px;padding-bottom:96px;">${body}</div>${doctorTabbar()}${accountModal()}<div class="toast" id="toast"></div>`;
+}
+function doctorPatients(){
+  const patients = S.apiData.patients || [];
+  return `
+    <div class="row"><span style="font-family:'Fraunces',serif;font-size:22px;font-weight:600;">Dr. Rao</span><div style="display:flex;align-items:center;gap:8px;"><span class="role-tag doctor">Clinician</span><div class="avatar" style="background:var(--navy);width:32px;height:32px;font-size:11px;" onclick="openAccountModal()">DR</div></div></div>
+    <div class="sub" style="margin-bottom:14px;">${patients.length} patients in active recovery</div>
+    ${!S.coachSeen.doctor ? `
+    <div class="tip-banner">
+      <div class="tx"><b>Welcome, Doctor.</b> Tap any patient to open their AI-generated plan — you can adjust it before it reaches them.</div>
+      <div class="cl" onclick="dismissCoach('doctor')">GOT IT</div>
+    </div>` : ''}
+    <div class="escalate-band">
+      <div class="et">⚠ Karthik S. — 2 doses missed</div>
+      <div class="ed">Confidence score dropped to 87 · flagged 12 min ago</div>
+      <div class="escalate-actions"><div class="a primary" onclick="openPatientPlan('Karthik Subramanian')">Review &amp; adjust plan</div></div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:2px;">Patient roster</div>
+      ${patients.map(p=>`
+        <div class="patient-row" onclick="openPatientPlan('${p.name}')">
+          <div class="p-avatar">${p.name.split(' ').map(part=>part[0]).slice(0,2).join('')}</div>
+          <div class="p-info"><div class="nm">${p.name}</div><div class="sub2">Day ${p.recovery_day} · ${p.surgery_type}</div></div>
+          <div class="p-score" style="color:${p.flagged?'var(--vital)':'var(--sage)'};">${p.confidence_score}<span class="s2">${p.flagged?'needs review':'on track'}</span></div>
+        </div>`).join('')}
+    </div>`;
+}
+function doctorAlerts(){
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:600;">Care Alerts</div>
+    <div class="sub" style="margin-bottom:14px;">Flagged across your active patients</div>
+    <div class="escalate-band">
+      <div class="et">⚠ Karthik S. — 2 doses missed</div>
+      <div class="ed">Confidence score dropped to 87 · flagged 12 min ago</div>
+      <div class="escalate-actions"><div class="a primary" onclick="openPatientPlan('Karthik Subramanian')">Review &amp; adjust plan</div></div>
+    </div>
+    <div class="card" style="border-color:var(--amber);background:var(--amber-dim);">
+      <div style="font-size:12.5px;font-weight:700;color:#9C6B12;">◐ Ravi V. — mobility target slipping</div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">2 of last 3 exercise sessions skipped</div>
+    </div>
+    <div class="card" style="border-color:var(--sage);background:var(--sage-dim);">
+      <div style="font-size:12.5px;font-weight:700;color:var(--sage);">✓ Sita P. — trending ahead of plan</div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">No action needed this week</div>
+    </div>`;
+}
+function doctorPlans(){
+  const p = S.selectedPatient;
+  const m = planMeta[p];
+  const first = p.split(' ')[0];
+  if(!m.flag){
+    return `
+      <div class="row"><span style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">${p}</span></div>
+      <div class="sub" style="margin-bottom:14px;">AI-generated plan · no anomalies detected</div>
+      <div class="card" style="background:var(--sage-dim);border:none;">
+        <div style="font-size:12.5px;font-weight:600;color:var(--sage);">✓ Plan looks good</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">Adherence and self-reported pain are within expected range. No changes recommended this cycle.</div>
+      </div>
+      <div class="${S.planStatus==='approved'?'btn btn-disabled':'btn btn-navy'}" onclick="${S.planStatus==='approved'?'':'pushPlan()'}">${S.planStatus==='approved'?'✓ Approved &amp; sent to '+first:'Approve as-is'}</div>`;
+  }
+  return `
+    <div class="row"><span style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">${p}</span></div>
+    <div class="sub" style="margin-bottom:14px;">Adjusting AI-generated plan · Day 6</div>
+    <div class="card">
+      <div class="label" style="margin-bottom:2px;">Editable plan controls</div>
+      <div class="adjust-row"><div><div class="an">Ibuprofen 400mg</div><div class="av">Currently ${S.stepper.ibuprofen}d</div></div>
+        <div class="stepper"><div class="btn3" onclick="stepIbu(-1)">–</div><div class="val3">${S.stepper.ibuprofen}d</div><div class="btn3" onclick="stepIbu(1)">+</div></div></div>
+      <div class="adjust-row"><div><div class="an">Mobility exercise intensity</div><div class="av">Currently ${S.stepper.mobility}/5</div></div>
+        <div class="stepper"><div class="btn3" onclick="stepMob(-1)">–</div><div class="val3">${S.stepper.mobility}/5</div><div class="btn3" onclick="stepMob(1)">+</div></div></div>
+      <div class="adjust-row"><div><div class="an">Substitute equivalent generic</div><div class="av">Amoxicillin → Amoxil (same class)</div></div><div class="pill sage" style="margin:0;">Approve</div></div>
+    </div>
+    <div class="card" style="background:var(--lav-dim);border:none;">
+      <div style="font-size:12px;color:var(--lav);font-weight:600;">Why the AI flagged this</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">${m.note}</div>
+    </div>
+    <div class="${S.planStatus==='approved'?'btn btn-disabled':'btn btn-navy'}" onclick="${S.planStatus==='approved'?'':'pushPlan()'}">${S.planStatus==='approved'?'✓ Approved &amp; sent to '+first:'Push update to '+first}</div>`;
+}
+function doctorProfile(){
+  return `
+    <div class="profile-card">
+      <div class="profile-avatar" style="background:var(--navy);">DR</div>
+      <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">Dr. Meera Rao</div>
+      <div class="sub">Orthopedic &amp; Post-Surgical Care</div>
+      <div class="pill sage" style="margin-top:10px;">✓ License verified</div>
+    </div>
+    <div class="card">
+      <div class="row"><span style="font-size:13px;">Active patients</span><span class="mono" style="font-size:13px;font-weight:600;">6</span></div>
+      <div class="divider"></div>
+      <div class="row"><span style="font-size:13px;">Avg. adherence across roster</span><span class="mono" style="font-size:13px;font-weight:600;">93%</span></div>
+      <div class="divider"></div>
+      <div class="row"><span style="font-size:13px;">Plans co-piloted this month</span><span class="mono" style="font-size:13px;font-weight:600;">41</span></div>
+    </div>
+    <div class="btn btn-ghost" style="margin-bottom:10px;" onclick="startOnboarding()">Replay app tour</div>
+    <div class="btn btn-ghost" onclick="goLogin()">Sign out</div>`;
+}
+
+// ---- SUPPLIER ----
+function supplierTabbar(){
+  const tabs = [['orders','Orders'],['inventory','Inventory'],['score','Score'],['profile','Profile']];
+  return `<div class="tabbar supplier">${tabs.map(([k,l])=>`
+    <div class="item ${S.supplierTab===k?'active':''}" onclick="setSupplierTab('${k}')"><div class="ic"></div><div class="tlabel">${l}</div></div>`).join('')}</div>`;
+}
+function screenSupplier(){
+  let body='';
+  if(S.supplierTab==='orders') body = supplierOrders();
+  else if(S.supplierTab==='inventory') body = supplierInventory();
+  else if(S.supplierTab==='score') body = supplierScore();
+  else if(S.supplierTab==='profile') body = supplierProfile();
+  return `<div class="pad" style="padding-top:20px;padding-bottom:96px;">${body}</div>${supplierTabbar()}${accountModal()}<div class="toast" id="toast"></div>`;
+}
+function statusPill(status){
+  if(status==='new') return `<span class="pill vital"><span class="dot"></span>New match</span>`;
+  if(status==='accepted') return `<span class="pill sage"><span class="dot"></span>Accepted</span>`;
+  return `<span class="pill amber"><span class="dot"></span>Dispatched</span>`;
+}
+function supplierOrders(){
+  const orders = S.apiData.orders || [];
+  const newOrders = orders.filter(o=>o.status==='new');
+  const otherOrders = orders.filter(o=>o.status!=='new');
+  return `
+    <div class="row"><span style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">Apollo MedSupply</span><div style="display:flex;align-items:center;gap:8px;"><span class="role-tag supplier">Supplier</span><div class="avatar" style="background:var(--teal);width:32px;height:32px;font-size:11px;" onclick="openAccountModal()">AM</div></div></div>
+    <div class="sub" style="margin-bottom:14px;">Fulfilment portal</div>
+    ${!S.coachSeen.supplier ? `
+    <div class="tip-banner">
+      <div class="tx"><b>Welcome!</b> New matched orders land here first — accept within a few minutes to protect your ranking score.</div>
+      <div class="cl" onclick="dismissCoach('supplier')">GOT IT</div>
+    </div>` : ''}
+    <div class="kpi-row">
+      <div class="kpi"><div class="kv">#1</div><div class="kl">Current rank</div></div>
+      <div class="kpi"><div class="kv">96%</div><div class="kl">Fill rate</div></div>
+      <div class="kpi"><div class="kv">3.1h</div><div class="kl">Avg dispatch</div></div>
+    </div>
+    <div class="label" style="margin-bottom:8px;">Incoming orders</div>
+    ${newOrders.length===0 ? `
+      <div class="card"><div class="empty-state"><div class="es-t">No new orders right now</div><div class="es-d">You'll get a push alert the moment HealSync matches a patient cart to your stock.</div></div></div>
+    ` : newOrders.map(o=>`
+      <div class="queue-item">
+        <div class="qh"><span class="qid">${o.id}</span>${statusPill(o.status)}</div>
+        <div class="qitems">${o.items.map(item=>`${item.name} ×${item.qty}`).join(', ')}</div>
+        <div class="queue-actions"><div class="qa accept" onclick="acceptOrder('${o.id}')">Accept order</div><div class="qa decline" onclick="declineOrder('${o.id}')">Decline</div></div>
+      </div>`).join('')}
+    ${otherOrders.length>0 ? `<div class="label" style="margin:14px 0 8px;">In progress</div>` : ''}
+    ${otherOrders.map(o=>`
+      <div class="queue-item">
+        <div class="qh"><span class="qid">${o.id}</span>${statusPill(o.status)}</div>
+        <div class="qitems">${o.items.map(item=>`${item.name} ×${item.qty}`).join(', ')}</div>
+      </div>`).join('')}`;
+}
+function supplierInventory(){
+  const inventory = S.apiData.inventory || [];
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">Inventory</div>
+    <div class="sub" style="margin-bottom:14px;">Live stock levels feeding the matching engine</div>
+    <div class="card">
+      ${inventory.map(i=>`
+        <div class="inv-row">
+          <div class="ih"><span>${i.name}</span><b>${i.stock_pct}%</b></div>
+          <div class="inv-bar"><div class="fi" style="width:${i.stock_pct}%;background:${i.stock_pct<25?'var(--vital)':'var(--sage)'};"></div></div>
+        </div>`).join('')}
+    </div>
+    <div class="card" style="background:var(--amber-dim);border:none;">
+      <div style="font-size:12.5px;font-weight:600;color:#9C6B12;">⚠ 2 items below reorder threshold</div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Ibuprofen 400mg and Walking Frame — restock to keep your match score up.</div>
+    </div>
+    <div class="btn btn-teal" onclick="toast('Reorder request sent to warehouse (demo)')">Reorder stock</div>`;
+}
+function supplierScore(){
+  const score = S.apiData.score || {rank:0,total_suppliers:0,score:0,stock_availability_pct:0,distance_km:0,avg_item_cost:0,avg_dispatch_hours:0};
+  return `
+    <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">Your Weighted Score</div>
+    <div class="sub">How HealSync ranks you against 3 nearby suppliers</div>
+    <div class="rank-hero"><div class="rn">${score.score.toFixed(2)}</div><div class="rl">Rank #${score.rank} of ${score.total_suppliers}</div></div>
+    <div class="card">
+      <div class="factor-row"><div class="fh"><span>Stock availability</span><b>${score.stock_availability_pct.toFixed(0)}%</b></div><div class="factor-bar"><div class="ff" style="width:${score.stock_availability_pct}%;"></div></div></div>
+      <div class="factor-row"><div class="fh"><span>Proximity</span><b>${score.distance_km.toFixed(1)} km</b></div><div class="factor-bar"><div class="ff" style="width:80%;"></div></div></div>
+      <div class="factor-row"><div class="fh"><span>Item cost</span><b>₹${score.avg_item_cost.toFixed(2)}</b></div><div class="factor-bar"><div class="ff" style="width:72%;"></div></div></div>
+      <div class="factor-row" style="margin-bottom:0;"><div class="fh"><span>Delivery time</span><b>${score.avg_dispatch_hours.toFixed(1)} hr</b></div><div class="factor-bar"><div class="ff" style="width:80%;"></div></div></div>
+    </div>
+    <div class="tip-band">Lowering average item cost by ~₹0.30 would extend your lead over MedPlus Wholesale for the next 30 days of orders.</div>`;
+}
+function supplierProfile(){
+  return `
+    <div class="profile-card">
+      <div class="profile-avatar" style="background:var(--teal);">AM</div>
+      <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;">Apollo MedSupply Hub</div>
+      <div class="sub">Registered medical supplier · Chennai</div>
+      <div class="pill sage" style="margin-top:10px;">✓ GMP · ISO 13485 certified</div>
+    </div>
+    <div class="card">
+      <div class="row"><span style="font-size:13px;">Orders fulfilled (30d)</span><span class="mono" style="font-size:13px;font-weight:600;">214</span></div>
+      <div class="divider"></div>
+      <div class="row"><span style="font-size:13px;">On-time delivery rate</span><span class="mono" style="font-size:13px;font-weight:600;">97%</span></div>
+      <div class="divider"></div>
+      <div class="row"><span style="font-size:13px;">Payout pending</span><span class="mono" style="font-size:13px;font-weight:600;">₹18,420</span></div>
+    </div>
+    <div class="btn btn-ghost" style="margin-bottom:10px;" onclick="startOnboarding()">Replay app tour</div>
+    <div class="btn btn-ghost" onclick="goLogin()">Sign out</div>`;
+}
+
+// ================= RENDER DISPATCH =================
+function render(){
+  const el = document.getElementById('screen');
+  if(S.screen==='splash') el.innerHTML = screenSplash();
+  else if(S.screen==='onboarding') el.innerHTML = screenOnboarding();
+  else if(S.screen==='login') el.innerHTML = screenLogin();
+  else if(S.screen==='patient') el.innerHTML = screenPatient();
+  else if(S.screen==='doctor') el.innerHTML = screenDoctor();
+  else if(S.screen==='supplier') el.innerHTML = screenSupplier();
+  el.scrollTop = 0;
+}
+init();
+renderQuickbar();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: healsync-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: MONGODB_URI
+        sync: false        # set in Render's dashboard — never commit real secrets
+      - key: MONGODB_DB_NAME
+        value: healsync
+      - key: FIREBASE_CREDENTIALS_PATH
+        value: ""
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: LLAMA_BASE_URL
+        value: ""
