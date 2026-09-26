@@ -12,6 +12,8 @@ from .config import MAX_UPLOAD_BYTES, USE_FIRESTORE
 from .contracts import UserRecord
 from .repositories import patient_repository, user_repository
 from .db.sqlite import SQLiteDatabase
+from .db.firestore_data import collection, records
+from .firebase import firestore_client, storage_bucket
 
 router = APIRouter(prefix="/api/v1/patients", tags=["Patients"])
 _OCR_ENGINE = None
@@ -51,7 +53,17 @@ def dashboard(patient=Depends(current_patient)):
     user, profile = patient
     items = patient_repository().recovery_items(profile.id, profile.recovery_day)
     doctor_name = None
-    if not USE_FIRESTORE:
+    if USE_FIRESTORE:
+        client = firestore_client()
+        if profile.doctor_id:
+            doctor = collection(client, "doctor_profiles").document(profile.doctor_id).get()
+            if doctor.exists:
+                doctor_user = collection(client, "users").document(doctor.to_dict().get("user_id", "")).get()
+                doctor_name = doctor_user.to_dict().get("name") if doctor_user.exists else None
+        patient_orders = records(client, "orders", patient_id=profile.id)
+        patient_orders.sort(key=lambda row: row.get("created_at", ""), reverse=True)
+        active_order_reference = patient_orders[0].get("reference") if patient_orders else None
+    else:
         with SQLiteDatabase() as database:
             database.initialize()
             doctor = database.execute(
@@ -83,9 +95,23 @@ def dashboard(patient=Depends(current_patient)):
 
 @router.get("/me/orders")
 def patient_orders(patient=Depends(current_patient)):
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Orders are not available for Firestore yet")
     _, profile = patient
+    if USE_FIRESTORE:
+        rows = records(firestore_client(), "orders", patient_id=profile.id)
+        rows.sort(key=lambda row: row.get("created_at", ""), reverse=True)
+        return [
+            {
+                "id": row["id"],
+                "reference": row.get("reference", ""),
+                "items": row.get("items", []),
+                "total_amount": row.get("total_amount", 0),
+                "status": row.get("status", ""),
+                "match_score": row.get("match_score", 0),
+                "distance_km": row.get("distance_km", 0),
+                "created_at": row.get("created_at", ""),
+            }
+            for row in rows
+        ]
     with SQLiteDatabase() as database:
         database.initialize()
         rows = database.execute(
@@ -163,9 +189,22 @@ def _prescription_lines(text: str) -> list[str]:
 
 @router.get("/me/documents")
 def list_documents(patient=Depends(current_patient)) -> list[dict]:
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Document listing is not available for Firestore yet")
     _, profile = patient
+    if USE_FIRESTORE:
+        rows = records(firestore_client(), "documents", patient_id=profile.id)
+        rows.sort(key=lambda row: row.get("uploaded_at", ""), reverse=True)
+        return [
+            {
+                "id": row["id"],
+                "filename": row.get("filename", ""),
+                "ocr_text": row.get("ocr_text", ""),
+                "extraction_mode": row.get("extraction_mode", ""),
+                "medicines": row.get("medicines", []),
+                "generated_plan_items": row.get("generated_plan_items", 0),
+                "uploaded_at": row.get("uploaded_at", ""),
+            }
+            for row in rows
+        ]
     with SQLiteDatabase() as database:
         database.initialize()
         rows = database.execute(
@@ -188,8 +227,6 @@ def list_documents(patient=Depends(current_patient)) -> list[dict]:
 
 @router.post("/me/documents", status_code=201)
 async def upload_document(file: UploadFile = File(...), patient=Depends(current_patient)) -> dict:
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Document uploads are not available for Firestore yet")
     _, profile = patient
     filename = Path(file.filename or "prescription").name
     content = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -200,21 +237,35 @@ async def upload_document(file: UploadFile = File(...), patient=Depends(current_
     text, extraction_mode = _extract_prescription_text(filename, content)
     medicines = _prescription_lines(text)
     document_id = str(uuid4())
-    upload_dir = Path.cwd() / "uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    stored_file = upload_dir / f"{document_id}{Path(filename).suffix.lower()}"
-    stored_file.write_bytes(content)
     uploaded_at = datetime.now(timezone.utc).isoformat()
-    with SQLiteDatabase() as database:
-        database.initialize()
-        database.execute(
-            """
-            INSERT INTO documents
-            (id, patient_id, filename, storage_path, ocr_text, nlp_pipeline_mode, extracted_medicines_json, generated_plan_items, uploaded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
-            """,
-            (document_id, profile.id, filename, str(stored_file), text, extraction_mode, json.dumps(medicines), uploaded_at),
-        )
+    if USE_FIRESTORE:
+        object_path = f"private/patients/{profile.id}/documents/{document_id}{Path(filename).suffix.lower()}"
+        storage_bucket().blob(object_path).upload_from_string(content, content_type=file.content_type or "application/octet-stream")
+        collection(firestore_client(), "documents").document(document_id).set({
+            "patient_id": profile.id,
+            "filename": filename,
+            "storage_path": object_path,
+            "ocr_text": text,
+            "extraction_mode": extraction_mode,
+            "medicines": medicines,
+            "generated_plan_items": 0,
+            "uploaded_at": uploaded_at,
+        })
+    else:
+        upload_dir = Path.cwd() / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        stored_file = upload_dir / f"{document_id}{Path(filename).suffix.lower()}"
+        stored_file.write_bytes(content)
+        with SQLiteDatabase() as database:
+            database.initialize()
+            database.execute(
+                """
+                INSERT INTO documents
+                (id, patient_id, filename, storage_path, ocr_text, nlp_pipeline_mode, extracted_medicines_json, generated_plan_items, uploaded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                (document_id, profile.id, filename, str(stored_file), text, extraction_mode, json.dumps(medicines), uploaded_at),
+            )
     return {
         "id": document_id,
         "filename": filename,
@@ -228,9 +279,35 @@ async def upload_document(file: UploadFile = File(...), patient=Depends(current_
 
 @router.post("/me/documents/{document_id}/add-prescription-items")
 def add_prescription_items(document_id: str, patient=Depends(current_patient)) -> dict:
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Prescription plan updates are not available for Firestore yet")
     _, profile = patient
+    if USE_FIRESTORE:
+        client = firestore_client()
+        document_ref = collection(client, "documents").document(document_id)
+        snapshot = document_ref.get()
+        if not snapshot.exists or snapshot.to_dict().get("patient_id") != profile.id:
+            raise HTTPException(status_code=404, detail="Prescription document not found")
+        document = snapshot.to_dict()
+        medicines = document.get("medicines", [])
+        if not medicines:
+            raise HTTPException(status_code=422, detail="No medicine lines were found to add")
+        plan_collection = collection(client, "recovery_plan_items")
+        description = f"From {document['filename']}; confirm instructions with your care team."
+        existing = list(plan_collection.where("patient_id", "==", profile.id).where("description", "==", description).stream())
+        existing_titles = {item.to_dict().get("title") for item in existing}
+        for medicine in medicines:
+            if medicine in existing_titles:
+                continue
+            plan_collection.document(str(uuid4())).set({
+                "patient_id": profile.id,
+                "day": profile.recovery_day,
+                "time": "Unscheduled",
+                "title": medicine,
+                "description": description,
+                "category": "medicine",
+                "doctor_adjusted": False,
+            })
+        document_ref.update({"generated_plan_items": len(medicines)})
+        return {"added": medicines}
     with SQLiteDatabase() as database:
         database.initialize()
         document = database.execute(
@@ -262,9 +339,33 @@ def add_prescription_items(document_id: str, patient=Depends(current_patient)) -
 
 @router.get("/me/documents/{document_id}/suggestions")
 def document_suggestions(document_id: str, patient=Depends(current_patient)) -> list[dict]:
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Purchase suggestions are not available for Firestore yet")
     _, profile = patient
+    if USE_FIRESTORE:
+        client = firestore_client()
+        document = collection(client, "documents").document(document_id).get()
+        if not document.exists or document.to_dict().get("patient_id") != profile.id:
+            raise HTTPException(status_code=404, detail="Prescription document not found")
+        medicines = [str(item).lower() for item in document.to_dict().get("medicines", [])]
+        inventory = records(client, "inventory_items")
+        suggestions = []
+        for item in inventory:
+            if int(item.get("stock_pct", 0)) <= 0:
+                continue
+            lower_name = item.get("name", "").lower()
+            if any(keyword in lower_name for keyword in ("bandage", "dressing", "pain relief", "gel")):
+                reason = "Useful alongside prescription medicines during recovery."
+            elif any(keyword in medicine for medicine in medicines for keyword in ("antibiotic", "amoxicillin")):
+                reason = "Commonly kept available while following an antibiotic prescription."
+            else:
+                continue
+            suggestions.append({
+                "name": item.get("name", ""),
+                "category": "Recovery supply",
+                "reason": reason,
+                "price": item.get("unit_price", 0),
+                "triggered_by": ", ".join(medicines[:2]) or "your prescription",
+            })
+        return suggestions[:4]
     with SQLiteDatabase() as database:
         database.initialize()
         document = database.execute(

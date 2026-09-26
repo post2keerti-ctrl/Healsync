@@ -27,6 +27,7 @@ class PatientProfile:
     confidence_score: int
     location_lat: float
     location_lng: float
+    doctor_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,9 @@ class AlertRecord:
 class UserRepository(Protocol):
     def get_by_firebase_uid(self, firebase_uid: str) -> UserRecord | None:
         """Return the local profile for a verified Firebase identity."""
+
+    def get_by_email(self, email: str) -> UserRecord | None:
+        """Return the existing profile matching a verified identity's email."""
 
     def create_or_update(self, user: UserRecord) -> UserRecord:
         """Persist a profile without allowing arbitrary role escalation."""

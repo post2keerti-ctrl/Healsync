@@ -169,17 +169,13 @@ function LoginScreen({ onLogin }: { onLogin: (role: Role) => void }) {
           const idToken = await userCredential.user.getIdToken();
           localStorage.setItem('healsync_token', idToken);
 
-          try {
-            await apiRequest('/auth/sync-profile', {
-              method: 'POST',
-              body: JSON.stringify({ name: demoAccounts[selectedRole].name, role: selectedRole }),
-            }, idToken);
-          } catch {
-            // Profile may already exist — that's fine.
-          }
+          const profile = await apiRequest<{ role: Role }>('/auth/sync-profile', {
+            method: 'POST',
+            body: JSON.stringify({ name: demoAccounts[selectedRole].name, role: selectedRole }),
+          }, idToken);
 
           localStorage.removeItem('healsync_demo_mode');
-          onLogin(selectedRole);
+          onLogin(profile.role);
           return;
         } catch (firebaseError) {
           const code = firebaseError && typeof firebaseError === 'object' && 'code' in firebaseError

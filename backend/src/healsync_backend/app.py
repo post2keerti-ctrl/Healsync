@@ -22,7 +22,11 @@ def create_app() -> FastAPI:
     from .doctor_routes import router as doctor_router
     app.include_router(doctor_router)
 
-    if not USE_FIRESTORE:
+    if USE_FIRESTORE:
+        from .db.firestore_data import seed_firestore
+        from .firebase import firestore_client
+        seed_firestore(firestore_client())
+    else:
         from .db.sqlite import SQLiteDatabase
         from .seed import seed_sqlite
         database = SQLiteDatabase()

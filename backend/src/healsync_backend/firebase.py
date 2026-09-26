@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 
 import firebase_admin
 from firebase_admin import auth, credentials, firestore, storage
@@ -11,7 +12,9 @@ from firebase_admin import auth, credentials, firestore, storage
 def initialize() -> firebase_admin.App:
     if firebase_admin._apps:
         return firebase_admin.get_app()
-    return firebase_admin.initialize_app(options={"storageBucket": None})
+    bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
+    options = {"storageBucket": bucket} if bucket else None
+    return firebase_admin.initialize_app(options=options)
 
 
 def verify_id_token(id_token: str) -> dict:

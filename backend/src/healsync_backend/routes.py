@@ -10,6 +10,8 @@ from .config import ENABLE_DEV_AUTH, USE_FIRESTORE
 from .contracts import UserRecord
 from .repositories import user_repository
 from .db.sqlite import SQLiteDatabase
+from .db.firestore_data import collection, records
+from .firebase import firestore_client
 
 router = APIRouter(prefix="/api/v1", tags=["Core"])
 
@@ -83,14 +85,59 @@ def get_profile_alias(claims: dict = Depends(current_claims)) -> dict:
     return get_current_profile(claims)
 
 
+@router.post("/auth/sync-profile")
+def sync_profile(payload: dict, claims: dict = Depends(current_claims)) -> dict:
+    email = str(claims.get("email", "")).strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="A verified account email is required")
+    repository = user_repository()
+    user = repository.get_by_firebase_uid(claims["uid"]) or repository.get_by_email(email)
+    if user is None:
+        user = repository.create_or_update(UserRecord(
+            id="",
+            firebase_uid=claims["uid"],
+            email=email,
+            name=str(claims.get("name") or email.split("@")[0]),
+            role="patient",
+        ))
+    elif user.firebase_uid != claims["uid"]:
+        user = repository.create_or_update(UserRecord(
+            id=user.id,
+            firebase_uid=claims["uid"],
+            email=user.email,
+            name=user.name,
+            role=user.role,
+        ))
+    return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}
+
+
 @router.get("/suppliers/me/orders")
 def supplier_orders(claims: dict = Depends(current_claims)):
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Supplier orders are not available for Firestore yet")
     repository = user_repository()
     user = repository.get_by_firebase_uid(claims["uid"])
     if user is None or user.role != "supplier":
         raise HTTPException(status_code=403, detail="Supplier access required")
+    if USE_FIRESTORE:
+        client = firestore_client()
+        suppliers = records(client, "supplier_profiles", user_id=user.id)
+        if not suppliers:
+            raise HTTPException(status_code=404, detail="Supplier profile not found")
+        rows = records(client, "orders", supplier_id=suppliers[0]["id"])
+        rows.sort(key=lambda row: row.get("created_at", ""), reverse=True)
+        return [
+            {
+                "id": row["id"],
+                "reference": row.get("reference", ""),
+                "patient_id": row.get("patient_id", ""),
+                "items": row.get("items", []),
+                "total_amount": row.get("total_amount", 0),
+                "status": row.get("status", ""),
+                "match_score": row.get("match_score", 0),
+                "distance_km": row.get("distance_km", 0),
+                "created_at": row.get("created_at", ""),
+            }
+            for row in rows
+        ]
     with SQLiteDatabase() as database:
         database.initialize()
         supplier = database.execute("SELECT id FROM supplier_profiles WHERE user_id = ?", (user.id,)).fetchone()
@@ -118,12 +165,26 @@ def supplier_orders(claims: dict = Depends(current_claims)):
 
 @router.get("/suppliers/me/inventory")
 def supplier_inventory(claims: dict = Depends(current_claims)):
-    if USE_FIRESTORE:
-        raise HTTPException(status_code=501, detail="Supplier inventory is not available for Firestore yet")
     repository = user_repository()
     user = repository.get_by_firebase_uid(claims["uid"])
     if user is None or user.role != "supplier":
         raise HTTPException(status_code=403, detail="Supplier access required")
+    if USE_FIRESTORE:
+        client = firestore_client()
+        suppliers = records(client, "supplier_profiles", user_id=user.id)
+        if not suppliers:
+            raise HTTPException(status_code=404, detail="Supplier profile not found")
+        rows = records(client, "inventory_items", supplier_id=suppliers[0]["id"])
+        rows.sort(key=lambda row: row.get("name", "").casefold())
+        return [
+            {
+                "id": row["id"],
+                "name": row.get("name", ""),
+                "stock_pct": row.get("stock_pct", 0),
+                "unit_price": row.get("unit_price", 0),
+            }
+            for row in rows
+        ]
     with SQLiteDatabase() as database:
         database.initialize()
         supplier = database.execute("SELECT id FROM supplier_profiles WHERE user_id = ?", (user.id,)).fetchone()
