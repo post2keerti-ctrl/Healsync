@@ -21,6 +21,45 @@ from .. import database as db, schemas
 from ..services import llm_service, matching_service, nlp_service, notification_service, ocr_service, routing_service
 from .auth import require_role
 
+
+# ---- Suggested recovery items catalog (maps medicine categories to recommended products) ----
+_SUGGESTION_CATALOG = {
+    "antibiotic": [
+        {"name": "Probiotic Capsules", "category": "supplement", "reason": "Restores gut flora during antibiotic therapy", "price": 8.50},
+        {"name": "Electrolyte Powder (ORS)", "category": "nutrition", "reason": "Prevents dehydration from antibiotic side effects", "price": 3.00},
+    ],
+    "painkiller": [
+        {"name": "Hot/Cold Compress Pack", "category": "recovery_aid", "reason": "Non-pharmacological pain relief support", "price": 12.00},
+        {"name": "Antacid Tablets", "category": "supplement", "reason": "Protects stomach lining when taking pain medication", "price": 4.50},
+    ],
+    "anti_inflammatory": [
+        {"name": "Turmeric Curcumin Capsules", "category": "supplement", "reason": "Natural anti-inflammatory support", "price": 11.00},
+        {"name": "Compression Bandage Roll", "category": "recovery_aid", "reason": "Reduces swelling at surgical site", "price": 5.50},
+    ],
+    "general": [
+        {"name": "Multivitamin Recovery Pack", "category": "supplement", "reason": "Supports immune system during recovery", "price": 9.00},
+        {"name": "High-Protein Nutrition Shake", "category": "nutrition", "reason": "Promotes tissue healing post-surgery", "price": 6.50},
+        {"name": "Wound Care Dressing Kit", "category": "recovery_aid", "reason": "Sterile dressings for post-surgical wound care", "price": 7.00},
+        {"name": "Pill Organizer (7-day)", "category": "recovery_aid", "reason": "Helps manage multiple medications on schedule", "price": 4.00},
+        {"name": "Digital Thermometer", "category": "recovery_aid", "reason": "Monitor for post-surgical fever", "price": 8.00},
+    ],
+}
+
+_ANTIBIOTIC_STEMS = {"amoxicillin", "azithromycin", "cephalexin", "ciprofloxacin", "amoxil"}
+_PAINKILLER_STEMS = {"paracetamol", "acetaminophen", "tramadol"}
+_ANTI_INFLAMMATORY_STEMS = {"ibuprofen", "diclofenac", "aspirin"}
+
+
+def _classify_medicine(name: str) -> str:
+    lower = name.lower()
+    if any(s in lower for s in _ANTIBIOTIC_STEMS):
+        return "antibiotic"
+    if any(s in lower for s in _PAINKILLER_STEMS):
+        return "painkiller"
+    if any(s in lower for s in _ANTI_INFLAMMATORY_STEMS):
+        return "anti_inflammatory"
+    return "general"
+
 router = APIRouter(prefix="/patients", tags=["Patient App"])
 
 
@@ -121,6 +160,90 @@ async def upload_discharge_summary(file: UploadFile = File(...), user: dict = De
         nlp_pipeline_mode=doc["nlp_pipeline_mode"], extracted_medicines=medicines,
         generated_plan_items=len(plan_items), uploaded_at=doc["uploaded_at"],
     )
+
+
+@router.get("/me/documents", response_model=List[schemas.DocumentOut])
+def list_documents(user: dict = Depends(require_role("patient"))):
+    """List all documents uploaded by the current patient."""
+    profile = _profile(user)
+    docs = db.documents.find({"patient_id": profile["_id"]}).sort("uploaded_at", -1)
+    return [
+        schemas.DocumentOut(
+            id=str(d["_id"]), filename=d["filename"], ocr_text=d.get("ocr_text", ""),
+            nlp_pipeline_mode=d.get("nlp_pipeline_mode", ""),
+            extracted_medicines=d.get("extracted_medicines", []),
+            generated_plan_items=len(list(db.recovery_plan_items.find({"patient_id": profile["_id"], "source_document_id": d["_id"]}))),
+            uploaded_at=d["uploaded_at"],
+        )
+        for d in docs
+    ]
+
+
+@router.post("/me/documents/{document_id}/add-prescription-items", response_model=dict)
+def add_prescription_items(document_id: str, user: dict = Depends(require_role("patient"))):
+    """Add extracted medicines from a document as recovery plan items."""
+    profile = _profile(user)
+    doc = db.documents.find_one({"_id": ObjectId(document_id), "patient_id": profile["_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    medicines = doc.get("extracted_medicines", [])
+    if not medicines:
+        raise HTTPException(status_code=422, detail="No medicines were extracted from this document")
+
+    # Check if items were already added for this document
+    existing = db.recovery_plan_items.find_one({"patient_id": profile["_id"], "source_document_id": doc["_id"]})
+    if existing:
+        return {"added": [], "message": "Items from this document were already added to your recovery plan."}
+
+    plan_items = llm_service.generate_recovery_plan(medicines, recovery_day=profile["recovery_day"])
+    added = []
+    for item in plan_items:
+        db.recovery_plan_items.insert_one({
+            "patient_id": profile["_id"], "source_document_id": doc["_id"],
+            "day": item["day"], "time": item["time"],
+            "title": item["title"], "description": item["description"],
+            "category": item["category"], "doctor_adjusted": False,
+        })
+        added.append(item["title"])
+
+    return {"added": added}
+
+
+@router.get("/me/documents/{document_id}/suggestions", response_model=List[dict])
+def get_document_suggestions(document_id: str, user: dict = Depends(require_role("patient"))):
+    """Return suggested recovery items based on medicines extracted from a document."""
+    profile = _profile(user)
+    doc = db.documents.find_one({"_id": ObjectId(document_id), "patient_id": profile["_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    medicines = doc.get("extracted_medicines", [])
+    suggestions = []
+    seen_names = set()
+    categories_matched = set()
+
+    for med in medicines:
+        med_name = med["name"] if isinstance(med, dict) else str(med)
+        cat = _classify_medicine(med_name)
+        if cat not in categories_matched:
+            categories_matched.add(cat)
+            for item in _SUGGESTION_CATALOG.get(cat, []):
+                if item["name"] not in seen_names:
+                    seen_names.add(item["name"])
+                    suggestions.append({
+                        **item,
+                        "triggered_by": med_name,
+                    })
+
+    # Always include general suggestions
+    if "general" not in categories_matched:
+        for item in _SUGGESTION_CATALOG["general"]:
+            if item["name"] not in seen_names:
+                seen_names.add(item["name"])
+                suggestions.append({**item, "triggered_by": "General recovery"})
+
+    return suggestions
 
 
 _CART_CATALOG = {

@@ -1,0 +1,94 @@
+.workspace-search { position: absolute; z-index: 30; top: 72px; right: 28px; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 30px rgba(20,33,54,.14); }
+.profile-mini { cursor: default; }
+.workspace-search label { display: block; margin-bottom: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+.workspace-search input { width: 100%; padding: 10px 11px; color: var(--navy); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.search-results { display: grid; margin-top: 8px; }
+.search-results button { display: flex; justify-content: space-between; align-items: center; padding: 9px 4px; border: 0; border-bottom: 1px solid var(--line); color: var(--navy); background: transparent; text-align: left; cursor: pointer; }
+.workspace-panel { min-height: 240px; }
+.role-switcher { display: flex; gap: 8px; }
+.role-switcher button { min-height: 38px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--navy); text-transform: capitalize; cursor: pointer; }
+.role-switcher button.selected { border-color: var(--coral); background: var(--coral-dim); color: #9d2b1d; }
+.error-notice { border-left-color: var(--coral); background: var(--coral-dim); }
+.document-layout { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); gap: 20px; }
+.document-list { align-content: start; }
+.document-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--navy); text-align: left; cursor: pointer; }
+.document-link.selected { background: var(--paper); }
+.document-link span { min-width: 0; flex: 1; }
+.document-link strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prescription-reader { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.prescription-reader h3 { margin: 0; overflow-wrap: anywhere; font-size: 14px; }
+.prescription-reader h4 { margin: 18px 0 8px; color: var(--navy); font-size: 12px; }
+.prescription-reader pre { max-height: 220px; overflow: auto; padding: 12px; background: var(--paper); color: var(--navy); font: 12px/1.6 'IBM Plex Mono', monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.prescription-items { display: grid; gap: 7px; margin: 0; padding-left: 20px; color: var(--navy); font-size: 13px; }
+.prescription-caution { color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.prescription-medicine-section { margin: 16px 0 20px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+.prescription-medicine-section h4 { margin-top: 0; }
+.purchase-suggestions { margin: 16px 0 20px; }
+.suggestion-list { display: grid; gap: 8px; }
+.suggestion-card { display: flex; justify-content: space-between; gap: 18px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.suggestion-card strong, .suggestion-card small { display: block; }
+.suggestion-card small { margin-top: 4px; color: var(--ink-soft); font-size: 11px; }
+.suggestion-card > span { flex: 0 0 auto; color: var(--navy); font: 600 12px 'IBM Plex Mono', monospace; }
+.patient-roster-row { padding: 14px 0; border-top: 1px solid var(--line); }
+.patient-roster-main { display: flex; align-items: center; gap: 12px; }
+.patient-roster-main > div:nth-child(2) { min-width: 0; flex: 1; }
+.patient-roster-main > div:nth-child(2) strong, .patient-roster-main > div:nth-child(2) small { display: block; }
+.patient-roster-main > div:nth-child(2) strong { color: var(--navy); font-size: 13px; }
+.patient-roster-main > div:nth-child(2) small { margin-top: 4px; color: var(--ink-soft); font-size: 11px; }
+.patient-recovery-detail { margin: 12px 0 0 48px; }
+.recovery-meter { height: 7px; overflow: hidden; background: var(--line); border-radius: 4px; }
+.recovery-meter i { display: block; height: 100%; background: var(--sage); }
+.patient-recovery-detail p { margin: 7px 0 0; color: var(--ink-soft); font-size: 11px; }
+.workspace-panel .panel-heading h2 { display: flex; align-items: center; gap: 8px; }
+.workspace-intro { margin: -4px 0 18px; color: var(--ink-soft); font-size: 13px; }
+.workspace-list { display: grid; }
+.workspace-row { display: flex; align-items: center; gap: 15px; min-height: 66px; padding: 12px 0; border-top: 1px solid var(--line); }
+.workspace-row > time { display: flex; align-items: center; gap: 6px; width: 98px; flex: 0 0 98px; color: var(--ink-soft); font: 500 11px 'IBM Plex Mono', monospace; }
+.workspace-row > div:not(.large-avatar) { min-width: 0; flex: 1; }
+.workspace-row strong, .workspace-row small { display: block; }
+.workspace-row strong { color: var(--navy); font-size: 13px; }
+.workspace-row small { margin-top: 4px; color: var(--ink-soft); font-size: 11px; }
+.workspace-row .secondary-button, .workspace-row .ghost-button { flex: 0 0 auto; }
+.workspace-row .status-pill { display: inline-flex; align-items: center; gap: 4px; }
+.workspace-empty { padding: 35px; color: var(--ink-soft); text-align: center; }
+.workspace-notice { padding: 10px 12px; border-left: 3px solid var(--teal); background: var(--teal-dim); color: var(--navy); font-size: 12px; }
+.upload-control { position: relative; overflow: hidden; cursor: pointer; }
+.upload-control input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.order-detail { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 0 10px; border-top: 1px solid var(--line); }
+.order-detail small, .order-detail strong, .order-detail span { display: block; }
+.order-detail small { color: var(--ink-soft); font: 600 9px 'IBM Plex Mono', monospace; }
+.order-detail strong { margin: 5px 0; font-size: 15px; }
+.order-detail span { color: var(--ink-soft); font-size: 12px; }
+.order-summary { min-width: 240px; flex: 1; }
+.order-actions { display: flex; align-items: center; gap: 24px; margin-left: 24px; flex: 0 0 auto; }
+.order-actions .secondary-button { margin-left: 8px; white-space: nowrap; }
+.order-expanded { display: grid; gap: 6px; width: 100%; margin-top: 8px; padding: 12px; border-top: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); font-size: 12px; }
+.order-expanded strong { color: var(--navy); }
+.delivery-state { color: var(--teal); font-size: 12px; font-weight: 600; }
+.workspace-track { max-width: 520px; margin-top: 22px; }
+.alert-mark { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: var(--amber); }
+.alert-mark.info { background: var(--teal); }
+.alert-row > div { flex: 1; }
+.patient-detail-row { flex-wrap: wrap; }
+.patient-detail-row > div:nth-child(2) { flex: 1; }
+.patient-score { color: var(--teal); font: 600 15px 'IBM Plex Mono', monospace; }
+.patient-expanded { flex: 0 0 100%; margin: 2px 0 0 48px; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+.inventory-control > div { min-width: 100px; flex: 1; }
+.inventory-meter { height: 5px; margin-top: 8px; overflow: hidden; background: var(--line); border-radius: 4px; }
+.inventory-meter i { display: block; height: 100%; background: var(--teal); }
+.inventory-control > span { width: 42px; color: var(--navy); font: 600 12px 'IBM Plex Mono', monospace; }
+.inventory-control .icon-button { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+@media (max-width: 600px) {
+  .workspace-search { top: 64px; right: 12px; }
+  .document-layout { grid-template-columns: 1fr; }
+  .patient-roster-main { flex-wrap: wrap; }
+  .patient-roster-main > div:nth-child(2) { flex-basis: calc(100% - 60px); }
+  .workspace-row { gap: 9px; }
+  .workspace-row > time { width: 75px; flex-basis: 75px; font-size: 9px; }
+  .workspace-row strong { font-size: 11px; }
+  .workspace-row .secondary-button, .workspace-row .ghost-button { padding: 7px; font-size: 10px; }
+  .order-detail { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .order-summary { min-width: 0; width: 100%; }
+  .order-actions { width: 100%; justify-content: space-between; margin-left: 0; }
+  .order-actions .secondary-button { margin-left: 12px; }
+}

@@ -11,3 +11,13 @@ firebase-service-account*.json
 firebase-adminsdk*.json
 secrets/
 *.log
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/uploads/
+**/node_modules/
+**/dist/
+**/*.egg-info/
+**/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
