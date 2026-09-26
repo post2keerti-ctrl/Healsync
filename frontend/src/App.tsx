@@ -184,6 +184,9 @@ function LoginScreen({ onLogin }: { onLogin: (role: Role) => void }) {
           if (!['auth/invalid-credential', 'auth/user-not-found', 'auth/operation-not-allowed'].includes(code)) {
             throw firebaseError;
           }
+          if (import.meta.env.PROD) {
+            throw firebaseError;
+          }
         }
       }
 

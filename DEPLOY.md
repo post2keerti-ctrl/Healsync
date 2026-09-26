@@ -27,7 +27,7 @@ Grant the Cloud Run runtime service account access to Firestore and uploaded fil
 $PROJECT_NUMBER = gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
 $RUNTIME_SA = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member="serviceAccount:$RUNTIME_SA" --role="roles/datastore.user"
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID --member="serviceAccount:$RUNTIME_SA" --role="roles/storage.objectAdmin"
+gcloud storage buckets add-iam-policy-binding gs://YOUR_PROJECT_ID.firebasestorage.app --member="serviceAccount:$RUNTIME_SA" --role="roles/storage.objectAdmin"
 ```
 
 Deploy from the repository root. The runtime uses Application Default Credentials;
@@ -55,6 +55,7 @@ In Firebase Console for the same Google Cloud project:
    `patient1@healsync.com`, `patient2@healsync.com`, and `patient3@healsync.com`.
 3. Set account passwords through Firebase Console or Firebase's password-reset
    workflow. The application does not enable production demo-password login.
+4. Add the Vercel production domain to Authentication's Authorized domains.
 
 The API seeds non-sensitive sample profiles, inventory, orders, plans, and alerts in
 Firestore at startup. A verified Firebase account is linked to its seeded profile by
