@@ -1,17 +1,17 @@
 services:
   - type: web
-    name: healsync-api
-    env: docker
+    name: healsync-demo-api
+    runtime: docker
     dockerfilePath: ./Dockerfile
+    rootDir: backend
     plan: free
+    healthCheckPath: /health
     envVars:
-      - key: MONGODB_URI
+      - key: ENVIRONMENT
+        value: demo
+      - key: ENABLE_DEV_AUTH
+        value: "true"
+      - key: DEV_JWT_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
         sync: false        # set in Render's dashboard — never commit real secrets
-      - key: MONGODB_DB_NAME
-        value: healsync
-      - key: FIREBASE_CREDENTIALS_PATH
-        value: ""
-      - key: GOOGLE_MAPS_API_KEY
-        sync: false
-      - key: LLAMA_BASE_URL
-        value: ""

@@ -8,14 +8,22 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .config import ENABLE_DEV_AUTH
+from .config import ENABLE_DEV_AUTH, ENVIRONMENT
 from .firebase import verify_id_token
 
 bearer = HTTPBearer(auto_error=True)
 
 
+def _dev_jwt_secret() -> str:
+    secret = os.getenv("DEV_JWT_SECRET")
+    if secret:
+        return secret
+    if ENVIRONMENT == "development":
+        return "dev-only-secret-change-me"
+    raise RuntimeError("DEV_JWT_SECRET must be configured when demo authentication is enabled")
+
+
 def issue_dev_token(uid: str, email: str) -> str:
-    secret = os.getenv("DEV_JWT_SECRET", "dev-only-secret-change-me")
     payload = {
         "uid": uid,
         "email": email,
@@ -23,12 +31,11 @@ def issue_dev_token(uid: str, email: str) -> str:
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(hours=24),
     }
-    return jwt.encode(payload, secret, algorithm="HS256")
+    return jwt.encode(payload, _dev_jwt_secret(), algorithm="HS256")
 
 
 def verify_dev_token(token: str) -> dict:
-    secret = os.getenv("DEV_JWT_SECRET", "dev-only-secret-change-me")
-    payload = jwt.decode(token, secret, algorithms=["HS256"])
+    payload = jwt.decode(token, _dev_jwt_secret(), algorithms=["HS256"])
     return {
         "uid": payload["uid"],
         "email": payload.get("email", ""),

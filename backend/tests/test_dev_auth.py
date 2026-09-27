@@ -1,6 +1,7 @@
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi import HTTPException
 
+import healsync_backend.auth as auth
 from healsync_backend.auth import current_claims, issue_dev_token
 from healsync_backend.contracts import UserRecord
 import healsync_backend.routes as routes
@@ -12,6 +13,18 @@ def test_dev_token_roundtrip() -> None:
 
     assert claims["uid"] == "dev:alice@example.com"
     assert claims["email"] == "alice@example.com"
+
+
+def test_demo_auth_requires_a_configured_jwt_secret(monkeypatch) -> None:
+    monkeypatch.setattr(auth, "ENVIRONMENT", "demo")
+    monkeypatch.delenv("DEV_JWT_SECRET", raising=False)
+
+    try:
+        auth.issue_dev_token("dev:alice@example.com", "alice@example.com")
+    except RuntimeError as error:
+        assert str(error) == "DEV_JWT_SECRET must be configured when demo authentication is enabled"
+    else:
+        raise AssertionError("Hosted demo auth must not use the local development secret")
 
 
 def test_dev_login_rejects_existing_account_role_mismatch(monkeypatch) -> None:
